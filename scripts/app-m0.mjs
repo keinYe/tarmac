@@ -105,6 +105,14 @@ try {
     } finally {
       const lines = (await readFile(report, 'utf8')).split('\n');
       console.log(lines.filter(line => /^(?:not ok |# (?:tests |pass |fail |cancelled |skipped |duration_ms ))/.test(line)).join('\n'));
+      // A failing test's YAML block (error, location, stack) follows its `not ok` line and ends
+      // with `...` at the same indent. CI logs keep only stdout, so print each block in full.
+      lines.forEach((line, index) => {
+        const indent = /^(\s*)not ok /.exec(line)?.[1];
+        if (indent === undefined) return;
+        const end = lines.indexOf(`${indent}  ...`, index);
+        console.log(lines.slice(index, end < 0 ? index + 1 : end + 1).join('\n'));
+      });
       console.log(`Full test report: ${report}`);
     }
   } else if (task === 'build') await bundle();
