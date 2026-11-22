@@ -52,6 +52,7 @@ Tarmac 是面向 AI coding agent 的桌面终端：一个窗口里运行和切�
 - `pnpm install --frozen-lockfile`、`pnpm typecheck`、`pnpm test`、`pnpm build`。测试运行数据统一放 `.tmp/app-m0-validation/`。
 - `pnpm package:local` 后执行 `pnpm smoke:runtime`：Electron 原生模块在本地打包后另验，Node 环境单测不代表 Electron ABI 已验证。`pnpm smoke:desktop` 检查真实桌面窗口。
 - `cmd/tarmac-native`：`go test ./cmd/tarmac-native`，Windows 构建用 `GOOS=windows go vet ./cmd/tarmac-native`。
+- 发布：推送与 `package.json` 版本一致的 `v<版本>` tag，触发 `.github/workflows/release.yml` 测试并打包 Linux x64 与 Windows x64，上传到草稿 Release；人工检查后在网页上发布。手动运行该工作流只构建、不建 Release。
 
 ## 项目红线
 

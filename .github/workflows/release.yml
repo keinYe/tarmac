@@ -1,0 +1,91 @@
+# Builds the Linux x64 and Windows x64 packages. A pushed v* tag uploads them to a draft
+# release that the maintainer reviews and publishes by hand; a manual run only builds and keeps
+# the packages as workflow artifacts.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: go test ./cmd/tarmac-native
+
+      - name: Package Linux x64
+        run: |
+          pnpm package:local
+          pnpm smoke:runtime
+
+      - name: Package Windows x64
+        run: node scripts/app-m0.mjs package --platform win32
+
+      - name: Archive
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          rm -rf dist/release
+          mkdir -p dist/release
+          tar -C dist/package --owner=0 --group=0 --numeric-owner -czf "dist/release/Tarmac-$VERSION-linux-x64.tar.gz" Tarmac-linux-x64
+          (cd dist/package && zip -qr "../release/Tarmac-$VERSION-win32-x64.zip" Tarmac-win32-x64)
+          (cd dist/release && sha256sum Tarmac-* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Keep packages (manual run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tarmac-${{ steps.version.outputs.version }}
+          path: dist/release/
+
+      - name: Upload to draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/release/* --clobber
+          else
+            cat > dist/release-notes.md <<EOF
+          Tarmac $VERSION 预览版。
+
+          - Linux x64：解压 \`Tarmac-$VERSION-linux-x64.tar.gz\`，运行目录中的 \`Tarmac\`。
+          - Windows 11 x64：解压 \`Tarmac-$VERSION-win32-x64.zip\`，运行 \`Tarmac.exe\`。程序未签名，首次运行 SmartScreen 会提示。
+          - 不支持 macOS。校验和见 \`SHA256SUMS.txt\`。
+          EOF
+            gh release create "$GITHUB_REF_NAME" dist/release/* --draft --verify-tag \
+              --title "Tarmac $VERSION" --notes-file dist/release-notes.md
+          fi
