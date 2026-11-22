@@ -82,8 +82,8 @@ jobs:
             cat > dist/release-notes.md <<EOF
           Tarmac $VERSION 预览版。
 
-          - Linux x64：解压 \`Tarmac-$VERSION-linux-x64.tar.gz\`，运行目录中的 \`Tarmac\`。
-          - Windows 11 x64：解压 \`Tarmac-$VERSION-win32-x64.zip\`，运行 \`Tarmac.exe\`。程序未签名，首次运行 SmartScreen 会提示。
+          - Linux x64：解压 \`Tarmac-$VERSION-linux-x64.tar.gz\`，在 \`Tarmac-linux-x64\` 目录中运行 \`./Tarmac --no-sandbox\`。不带该参数时，Ubuntu 24.04 等发行版会因 \`chrome-sandbox\` 不是 root 所有、权限不是 4755 而退出；要保留沙箱，先执行 \`sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox\`，再直接运行 \`./Tarmac\`。详见 README「安装」一节。
+          - Windows 11 x64：解压 \`Tarmac-$VERSION-win32-x64.zip\`，运行 \`Tarmac.exe\`。程序未签名，首次运行时 SmartScreen 会拦截，点「更多信息」再点「仍要运行」。
           - 不支持 macOS。校验和见 \`SHA256SUMS.txt\`。
           EOF
             gh release create "$GITHUB_REF_NAME" dist/release/* --draft --verify-tag \

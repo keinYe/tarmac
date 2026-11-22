@@ -47,11 +47,34 @@ Shell 和其他命令行程序也可以在 Tarmac 中运行，只是不显示 ag
 
 ## 安装
 
-目前不提供预编译的发布包，需要从源码构建。
+### 下载安装包
+
+在 [Releases](https://github.com/keinye/tarmac/releases) 页面下载对应平台的压缩包，可以用同一页的 `SHA256SUMS.txt` 校验。
+
+#### Linux x64
+
+```bash
+tar -xzf Tarmac-<版本>-linux-x64.tar.gz
+cd Tarmac-linux-x64
+./Tarmac --no-sandbox
+```
+
+Ubuntu 24.04 等发行版限制了 Chromium 的沙箱，直接运行 `./Tarmac` 会报 `The SUID sandbox helper binary was found, but is not configured correctly` 并退出。二选一：
+
+- 带 `--no-sandbox` 启动（如上），不需要 root。Tarmac 只加载自带的本地页面。
+- 保留沙箱：在 `Tarmac-linux-x64` 目录中执行 `sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox`，之后直接运行 `./Tarmac`。每次换新版本都要重新执行。
+
+下载包不会添加应用菜单启动项。
+
+#### Windows 11 x64
+
+解压 `Tarmac-<版本>-win32-x64.zip`，运行其中的 `Tarmac.exe`。程序没有签名，首次运行时 SmartScreen 会拦截，点「更多信息」再点「仍要运行」。
+
+### 从源码安装
 
 依赖：Node.js 24 或更新版本、pnpm 11.9.0；Linux 上编译原生依赖还需要 C++ 编译工具和 Python。
 
-### Linux
+#### Linux
 
 ```bash
 git clone https://github.com/keinye/tarmac.git
@@ -63,7 +86,7 @@ pnpm desktop:entry install --package
 
 App 会安装到 `~/.local/opt/tarmac/`，并在应用菜单中添加 Tarmac。升级时拉取新代码后重复后三步；卸载用 `pnpm desktop:entry uninstall --package`。
 
-### Windows
+#### Windows
 
 目前在 Linux 上交叉打包，需要额外安装 Go 1.25 或更新版本：
 
@@ -71,7 +94,7 @@ App 会安装到 `~/.local/opt/tarmac/`，并在应用菜单中添加 Tarmac。�
 node scripts/app-m0.mjs package --platform win32
 ```
 
-把生成的 `dist/package/Tarmac-win32-x64.zip` 复制到 Windows，解压后运行 `Tarmac.exe`。
+把生成的 `dist/package/Tarmac-win32-x64` 目录复制到 Windows，运行其中的 `Tarmac.exe`。
 
 ## 快速开始
 
