@@ -1,0 +1,8 @@
+#!/bin/sh
+# Rejects a commit whose staged file names or added lines contain private information.
+# Binary files are not inspected. Enable with: git config core.hooksPath .githooks
+dir=$(dirname "$0")
+{
+  git diff --cached --name-only --diff-filter=ACMR
+  git diff --cached -U0 --no-color --diff-filter=ACMR | grep '^+' | grep -v '^+++ '
+} | sh "$dir/check-private.sh" "the staged changes"

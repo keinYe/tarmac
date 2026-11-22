@@ -1,0 +1,608 @@
+<title>Tarmac 远程主机</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&family=Ubuntu+Sans+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a framed replica of the Tarmac window (sidebar · terminal · history) under a scenario switcher,
+   with the decisions for the current scenario listed beside it. Single dark look, same as the App. */
+:root {
+  --page: #0c0e10; --bg: #121417; --raise: #1e2227; --line: #262b31; --edge: #1f2328;
+  --text: #e4e7ea; --dim: #9aa1a9; --faint: #7d858e; --soft: #c4c9ce; --accent: #4fd1c5; --branch: #8b949e;
+  --working: #f0a54a; --waiting: #5fd787; --idle: #8a8a8a; --approval: #ff6b6b; --running: #cfd3d8; --exited: #626a73;
+  --claude: #e8835f; --codex: #d4d8dc; --shell: #8a9199; --kimi: #87afff; --agy: #8c9eff;
+  --usage-token: #fab387; --usage-label: #f5c2e7; --usage-time: #89b4fa; --usage-ok: #a6e3a1;
+  --mono: "Ubuntu Sans Mono", "Ubuntu Mono", "MiSans", ui-monospace, monospace;
+  --ui: "Ubuntu", "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.55 var(--ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); font: 11px/16px var(--mono); background: var(--raise); }
+.wrap { max-width: 1480px; margin: 0 auto; display: grid; gap: 18px; }
+header.page { display: grid; gap: 6px; }
+header.page h1 { margin: 0; font: 700 22px/1.3 var(--ui); text-wrap: balance; }
+header.page p { margin: 0; max-width: 72ch; color: var(--dim); }
+.scenes { display: flex; flex-wrap: wrap; gap: 6px; }
+.scenes button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--dim); font-size: 13px; }
+.scenes button:hover { color: var(--text); background: var(--raise); }
+.scenes button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+@media (max-width: 1180px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.frame { min-width: 0; overflow-x: auto; border-radius: 10px; }
+
+/* ---------- App replica ---------- */
+.win { position: relative; width: 1080px; height: 640px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); font: 13px/1.45 var(--ui); box-shadow: 0 20px 50px rgb(0 0 0 / 45%); }
+.titlebar { display: flex; align-items: center; gap: 14px; height: 36px; flex: none; padding: 0 12px 0 16px; border-bottom: 1px solid var(--edge); color: var(--dim); font-size: 12px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font: 600 13px var(--mono); }
+.brand svg { width: 16px; height: 16px; }
+.host-chip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; font: 11.5px/18px var(--mono); color: var(--soft); }
+.host-chip .hd { width: 6px; height: 6px; border-radius: 50%; background: var(--waiting); }
+.host-chip.off .hd { background: var(--approval); } .host-chip.off { color: var(--approval); }
+.tok { font-family: var(--mono); color: var(--usage-token); }
+.quota { font-family: var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quota .p { color: var(--usage-label); } .quota .ok { color: var(--usage-ok); } .quota .t { color: var(--usage-time); }
+.wctl { margin-left: auto; display: flex; gap: 16px; color: var(--faint); font-size: 14px; }
+.wctl button:hover { color: var(--text); }
+.app { display: grid; grid-template-columns: 272px minmax(0, 1fr); flex: 1; min-height: 0; }
+.app.with-history { grid-template-columns: 272px minmax(0, 1fr) 280px; }
+
+.side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--edge); user-select: none; }
+.side-body { flex: 1; overflow: auto; padding: 6px 8px 12px; }
+.host { margin-top: 6px; }
+.host + .host { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.host-row { position: relative; display: flex; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 6px; }
+.host-row:hover { background: var(--raise); }
+.host-row .hico { width: 15px; height: 15px; flex: none; color: var(--dim); }
+.host-name { font-weight: 700; color: var(--text); white-space: nowrap; }
+.host-addr { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font: 11.5px var(--mono); }
+.conn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; flex: none; font: 11.5px var(--mono); color: var(--dim); }
+.conn .cd { width: 7px; height: 7px; border-radius: 50%; background: var(--waiting); }
+.conn.off { color: var(--approval); } .conn.off .cd { background: var(--approval); animation: pulse 1.2s ease-in-out infinite; }
+.conn.warn { color: var(--working); } .conn.warn .cd { background: var(--working); }
+.more { flex: none; width: 20px; height: 20px; border-radius: 4px; color: var(--faint); line-height: 18px; text-align: center; }
+.more:hover { background: var(--line); color: var(--text); }
+.menu { position: absolute; right: 4px; top: 30px; z-index: 5; min-width: 168px; padding: 4px; border: 1px solid var(--line); border-radius: 7px; background: var(--raise); box-shadow: 0 10px 24px rgb(0 0 0 / 45%); }
+.menu button { display: block; width: 100%; padding: 5px 10px; border-radius: 4px; text-align: left; color: var(--soft); }
+.menu button:hover { background: var(--line); color: var(--text); }
+.menu button.danger { color: var(--approval); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
+.section { margin: 8px 8px 4px; color: var(--faint); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; }
+.group-row { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 8px; border-radius: 6px; text-align: left; }
+.group-row:hover, .session:hover, .recent:hover { background: var(--raise); }
+.chev { width: 12px; flex: none; color: var(--faint); transition: transform .12s; }
+.group.collapsed .chev { transform: rotate(-90deg); }
+.folder { width: 15px; height: 15px; flex: none; color: var(--faint); }
+.project { flex: 1 1 auto; min-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text); }
+.branchn { margin-left: auto; color: var(--branch); font: 11.5px/18px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52%; }
+.sessions { margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--line); }
+.group.collapsed .sessions { display: none; }
+.session { position: relative; display: block; width: 100%; margin-top: 2px; padding: 6px 8px 7px; border-radius: 6px; text-align: left; }
+.session.active { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.session.active::before { content: ""; position: absolute; left: -11px; top: 7px; bottom: 7px; width: 2px; border-radius: 2px; background: var(--accent); }
+.host.offline .sessions, .host.offline .group-row { opacity: .5; }
+.identity { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.logo { display: grid; place-items: center; width: 19px; height: 19px; flex: none; border-radius: 5px; background: color-mix(in srgb, currentColor 13%, transparent); font: 700 10px var(--mono); }
+.b-claude { color: var(--claude); } .b-codex { color: var(--codex); } .b-shell { color: var(--shell); } .b-kimi { color: var(--kimi); }
+.sname { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; white-space: nowrap; }
+.state { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+.state.working .dot { background: var(--working); animation: pulse 1.4s ease-in-out infinite; }
+.state.waiting .dot { background: var(--waiting); }
+.state.idle .dot { border: 1.5px solid var(--idle); }
+.state.running .dot { background: var(--running); }
+.state.stale .dot { background: var(--exited); animation: none; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.preview { display: block; margin: 3px 0 0 25px; color: var(--soft); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: 6px; text-align: left; }
+.recent .project { font-weight: 500; color: var(--soft); }
+.recent .open { margin-left: auto; flex: none; color: var(--faint); font-size: 11.5px; opacity: 0; }
+.recent:hover .open { opacity: 1; }
+.host-note { margin: 6px 8px 2px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.55; color: var(--soft);
+  background: color-mix(in srgb, var(--working) 10%, transparent); border: 1px solid color-mix(in srgb, var(--working) 30%, transparent); }
+.host-note.bad { background: color-mix(in srgb, var(--approval) 10%, transparent); border-color: color-mix(in srgb, var(--approval) 30%, transparent); }
+.host-note b { color: var(--text); font-weight: 600; }
+.host-note .acts { display: flex; gap: 8px; margin-top: 6px; }
+.btn { padding: 3px 11px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); font-size: 12px; }
+.btn:hover { background: var(--line); }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); font-weight: 600; }
+.btn.primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn.danger { border-color: var(--approval); color: var(--approval); }
+.add-host { display: flex; align-items: center; gap: 8px; width: calc(100% - 16px); margin: 14px 8px 0; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 6px; color: var(--dim); font-size: 12.5px; }
+.add-host:hover { color: var(--text); border-color: var(--faint); }
+.side-foot { padding: 10px 16px 14px; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--dim); font-size: 12px; }
+.keys button { display: inline-flex; align-items: center; gap: 6px; }
+
+.center { position: relative; min-width: 0; min-height: 0; }
+.term { position: absolute; inset: 6px 10px 0 12px; margin: 0; overflow: hidden; font: 13px/1.5 var(--mono); color: var(--text); white-space: pre; }
+.term .g { color: var(--waiting); } .term .d { color: var(--faint); } .term .o { color: var(--claude); } .term .y { color: var(--working); }
+.term .c { color: var(--accent); } .term .k { color: var(--kimi); } .term .w { color: var(--soft); }
+.term.dim { opacity: .35; filter: grayscale(.6); }
+.cursor { display: inline-block; width: .6em; background: var(--text); animation: pulse 1s steps(1) infinite; }
+.overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center; padding: 24px; }
+.overlay strong { font-size: 15px; font-weight: 600; }
+.overlay span { color: var(--dim); max-width: 46ch; }
+.overlay .acts { display: flex; gap: 8px; margin-top: 4px; }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6; padding: 7px 14px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--raise); color: var(--text); font-size: 12.5px; box-shadow: 0 8px 20px rgb(0 0 0 / 40%); white-space: nowrap; }
+
+.history { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 1px solid var(--edge); }
+.history-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
+.history-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.history-head .mode { color: var(--faint); font-size: 12px; }
+.history-head .close { margin-left: auto; color: var(--faint); font-size: 12px; }
+.records { flex: 1; overflow: auto; padding: 0 14px; }
+.record { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.record time { color: var(--faint); font: 11.5px var(--mono); }
+.record p { margin: 4px 0 0; font-size: 12.5px; }
+.diag { padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; }
+.diag dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.diag dt { color: var(--faint); } .diag dd { margin: 0; overflow-wrap: anywhere; }
+.diag .new { color: var(--accent); }
+
+/* Modal */
+.scrim { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; background: rgb(6 8 10 / 62%); }
+.dialog { width: 460px; max-width: calc(100% - 32px); display: grid; gap: 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--raise); box-shadow: 0 20px 50px rgb(0 0 0 / 55%); }
+.dialog h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.dialog p { margin: 0; color: var(--dim); font-size: 12.5px; line-height: 1.6; }
+.fields { display: grid; grid-template-columns: 1fr 120px; gap: 10px; }
+.field { display: grid; gap: 4px; font-size: 12px; color: var(--dim); }
+.field.wide { grid-column: 1 / -1; }
+.field input, .field select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--text); font: 13px var(--mono); }
+.field .hint { color: var(--faint); font-size: 11.5px; }
+.checks { display: grid; gap: 6px; margin: 0; padding: 10px 12px; list-style: none; border-radius: 6px; background: var(--bg); font-size: 12.5px; }
+.checks li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; color: var(--faint); }
+.checks li .m { font-family: var(--mono); text-align: center; }
+.checks li.ok { color: var(--soft); } .checks li.ok .m { color: var(--waiting); }
+.checks li.run { color: var(--text); } .checks li.run .m { color: var(--working); }
+.checks li.fail { color: var(--approval); }
+.checks li small { display: block; color: var(--faint); font-size: 11.5px; }
+.checks li.fail small { color: var(--soft); }
+.dialog .acts { display: flex; justify-content: flex-end; gap: 8px; }
+.sim { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px dashed var(--line); color: var(--faint); font-size: 11.5px; }
+.sim select { padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--dim); font: 11.5px var(--ui); }
+.trust { display: grid; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 7px; background: var(--bg); font-size: 12.5px; }
+.trust.warn { border-color: color-mix(in srgb, var(--approval) 55%, var(--line)); }
+.trust b { color: var(--text); font-weight: 600; } .trust.warn b { color: var(--approval); }
+.trust dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.trust dt { color: var(--faint); } .trust dd { margin: 0; overflow-wrap: anywhere; color: var(--soft); }
+.trust .fp { font-family: var(--mono); color: var(--accent); } .trust .fp.old { color: var(--approval); text-decoration: line-through; }
+.trust code, .dialog code { font: 11.5px var(--mono); color: var(--accent); }
+.dialog .acts.left { justify-content: flex-start; }
+.refused { color: var(--approval) !important; }
+.check { display: flex; gap: 8px; align-items: flex-start; color: var(--soft); font-size: 12.5px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.split { display: grid; gap: 6px; padding: 10px 12px; border-radius: 6px; background: var(--bg); font-size: 12.5px; }
+.split div { display: flex; justify-content: space-between; gap: 12px; }
+.split .end { color: var(--approval); } .split .keep { color: var(--waiting); }
+
+/* ---------- Notes ---------- */
+.notes { min-width: 0; display: grid; gap: 14px; }
+.card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.card h2 { margin: 0 0 8px; font-size: 14.5px; font-weight: 700; }
+.card ol, .card ul { margin: 0; padding-left: 20px; display: grid; gap: 7px; color: var(--soft); font-size: 13px; }
+.card li b { color: var(--text); font-weight: 600; }
+.card code { font: 12px var(--mono); color: var(--accent); }
+.card.ask { border-color: color-mix(in srgb, var(--working) 45%, var(--line)); }
+.card.ask h2 { color: var(--working); }
+.legend { color: var(--faint); font-size: 12px; }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <h1>Tarmac 远程主机：交互原型</h1>
+    <p>agent 跑在局域网内的 Linux 主机上，Windows 上的 Tarmac 通过 SSH 连接那台机器的 daemon。本机会话照旧可用，左栏按主机分组。点上方场景切换，窗口内的会话、主机菜单、新建、添加主机和关闭按钮都可以点。示例主机名、地址和会话都是虚构的。</p>
+  </header>
+
+  <nav class="scenes" aria-label="场景">
+    <button data-scene="normal" aria-pressed="true">① 日常使用</button>
+    <button data-scene="add">② 添加远程主机</button>
+    <button data-scene="offline">③ 连接断开</button>
+    <button data-scene="mismatch">④ 版本不一致</button>
+    <button data-scene="close">⑤ 关闭窗口</button>
+  </nav>
+
+  <div class="stage">
+    <div class="frame"><div class="win" id="win"></div></div>
+    <aside class="notes" id="notes"></aside>
+  </div>
+</div>
+
+<script>
+const ICON_HOST_LOCAL = '<svg class="hico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.8" y="2.6" width="12.4" height="8.4" rx="1.2"/><path d="M5.5 13.6h5M8 11v2.6"/></svg>';
+const ICON_HOST_REMOTE = '<svg class="hico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="5" rx="1"/><rect x="2" y="9" width="12" height="5" rx="1"/><path d="M4.6 4.5h.01M4.6 11.5h.01" stroke-width="2" stroke-linecap="round"/></svg>';
+const FOLDER = '<svg class="folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.1l1.4 1.6h5.5c.7 0 1.2.5 1.2 1.2v6.1c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>';
+const CHEV = '<svg class="chev" viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 4.2h7L6 8.3z"/></svg>';
+const LABEL = { working: '工作中', waiting: '等待输入', idle: '空闲', running: '运行中', stale: '状态未知' };
+
+const T = {
+  claude: `<span class="o">✻</span> Claude Code  <span class="d">~/work/tarmac</span>
+
+<span class="w">&gt; 把远程连接的规格写出来，范围按昨天讨论的五项</span>
+
+<span class="o">●</span> 先读取 AGENTS.md 和 ROADMAP.md
+  <span class="d">⎿  Read 146 lines</span>
+
+<span class="o">●</span> Write(docs/app-remote-spec.md)
+  <span class="d">⎿  Wrote 182 lines</span>
+
+<span class="o">●</span> 规格已写好，下面核对 platform.ts 的连接入口…
+
+<span class="y">✻ Working… (12s · esc to interrupt)</span>`,
+  codex: `<span class="w">&gt;_ Codex</span>  <span class="d">~/work/tarmac</span>
+
+<span class="w">› 检查 session.ts 里 remote-* 请求是否会 attach</span>
+
+<span class="c">•</span> 已检查 4 处调用，remote-* 都走 writeRemote，不改 owner。
+  结论：符合 tarmac-ctl 契约。
+
+<span class="g">›</span> <span class="cursor"> </span>`,
+  kimi: `<span class="k">Kimi Code</span>  <span class="d">~/work/tarmac</span>
+
+<span class="w">✨ 整理今天的提交说明</span>
+<span class="d">已完成，3 条提交说明草稿在上方。</span>
+
+<span class="k">kimi&gt;</span> <span class="cursor"> </span>`,
+  bash: `<span class="g">dev@ubuntu-ws</span>:<span class="c">~/work/chat-bot</span>$ pnpm test
+
+ <span class="g">✓</span> src/sessions.test.ts (18)
+ <span class="g">✓</span> src/tarmac.test.ts (9)
+
+ Test Files  <span class="g">2 passed</span> (2)
+      Tests  <span class="g">27 passed</span> (27)
+
+<span class="g">dev@ubuntu-ws</span>:<span class="c">~/work/chat-bot</span>$ <span class="cursor"> </span>`,
+  pwsh: `PowerShell 7.5.4
+<span class="d">PS</span> C:\\Users\\dev\\Documents&gt; <span class="cursor"> </span>`,
+  newShell: (host, dir) => host === 'ws'
+    ? `<span class="g">dev@ubuntu-ws</span>:<span class="c">${dir}</span>$ <span class="cursor"> </span>`
+    : `PowerShell 7.5.4\n<span class="d">PS</span> ${dir}&gt; <span class="cursor"> </span>`,
+};
+
+const initial = () => ({
+  hosts: [
+    { id: 'ws', name: 'ubuntu-ws', addr: 'dev@192.168.1.20', remote: true, latency: '2 ms', collapsed: false,
+      groups: [
+        { path: '~/work/tarmac', name: 'tarmac', branch: 'app-architecture', collapsed: false, sessions: [
+          { id: 's1', brand: 'claude', name: 'Claude Code', state: 'working', preview: '把远程连接的规格写出来，范围按昨天讨论的五项', term: 'claude', tokens: '128.4k' },
+          { id: 's2', brand: 'codex', name: 'Codex', state: 'waiting', preview: '检查 session.ts 里 remote-* 请求是否会 attach', term: 'codex', tokens: '41.2k' },
+          { id: 's3', brand: 'kimi', name: 'Kimi Code', state: 'idle', preview: '整理今天的提交说明', term: 'kimi', tokens: '9.8k' },
+        ] },
+        { path: '~/work/chat-bot', name: 'chat-bot', branch: 'main', collapsed: false, sessions: [
+          { id: 's4', brand: 'shell', name: 'bash', state: 'running', preview: 'pnpm test', term: 'bash' },
+        ] },
+      ],
+      recent: [{ path: '~/work/yj-android', name: 'yj-android' }, { path: '~/notes/blog', name: 'blog' }] },
+    { id: 'local', name: '本机', addr: 'DESKTOP-WIN11', remote: false, collapsed: false,
+      groups: [
+        { path: 'C:\\Users\\dev\\Documents', name: 'Documents', collapsed: false, sessions: [
+          { id: 's5', brand: 'shell', name: 'PowerShell', state: 'running', preview: '', term: 'pwsh' },
+        ] },
+      ],
+      recent: [{ path: 'C:\\Users\\dev\\Downloads', name: 'Downloads' }] },
+  ],
+  active: 's1', menu: null, toast: '', history: true, dialog: null, removed: false,
+  add: { sim: 'first', step: -1, done: false, added: false },
+  seq: 6,
+});
+let S = initial();
+let scene = 'normal';
+let toastTimer, stepTimer;
+
+const host = id => S.hosts.find(h => h.id === id);
+function find(id) {
+  for (const h of S.hosts) for (const g of h.groups) for (const s of g.sessions) if (s.id === id) return { h, g, s };
+  return null;
+}
+const offline = h => h.remote && scene === 'offline';
+const mismatch = h => h.remote && scene === 'mismatch';
+
+function toast(text) {
+  S.toast = text; render();
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = ''; render(); }, 2600);
+}
+
+function sessionHtml(h, s) {
+  const st = offline(h) ? 'stale' : s.state;
+  return `<button class="session${s.id === S.active ? ' active' : ''}" data-act="session" data-id="${s.id}">
+    <span class="identity"><span class="logo b-${s.brand}">${s.brand === 'shell' ? '&gt;_' : s.name[0]}</span>
+      <span class="sname">${s.name}</span><span class="state ${st}"><span class="dot"></span>${LABEL[st]}</span></span>
+    ${s.preview ? `<span class="preview">${s.preview}</span>` : ''}</button>`;
+}
+
+function hostHtml(h) {
+  let conn;
+  if (!h.remote) conn = '<span class="conn"><span class="cd"></span>本机</span>';
+  else if (offline(h)) conn = '<span class="conn off"><span class="cd"></span>重连中 4s</span>';
+  else if (mismatch(h)) conn = '<span class="conn warn"><span class="cd"></span>未连接</span>';
+  else conn = `<span class="conn"><span class="cd"></span>${h.latency}</span>`;
+  const menu = S.menu === h.id ? `<div class="menu" role="menu">
+      <button data-act="reconnect" data-host="${h.id}">立即重连</button>
+      <button data-act="disconnect" data-host="${h.id}">断开连接</button>
+      <button data-act="edit" data-host="${h.id}">编辑主机…</button><hr>
+      <button class="danger" data-act="remove" data-host="${h.id}">从列表移除</button></div>` : '';
+  let body = '';
+  if (mismatch(h)) {
+    body = `<div class="host-note"><b>两端版本不一致，未连接</b><br>本机 Tarmac 0.1.0，ubuntu-ws 上是 0.2.0。把两端升级到同一版本后再连接；ubuntu-ws 上的 agent 照常运行。
+      <div class="acts"><button class="btn" data-act="toast" data-msg="已重试：版本仍不一致">重试</button></div></div>`;
+  } else {
+    if (offline(h)) body += `<div class="host-note bad"><b>与 ubuntu-ws 的连接已断开</b><br>agent 仍在 ubuntu-ws 上运行。下方是断开前的状态，重连后自动刷新。
+      <div class="acts"><button class="btn" data-act="reconnect" data-host="${h.id}">立即重连</button></div></div>`;
+    body += h.groups.map(g => `<div class="group${g.collapsed ? ' collapsed' : ''}">
+        <button class="group-row" data-act="toggle" data-host="${h.id}" data-path="${g.path}" title="${g.path}">${CHEV}${FOLDER}
+          <span class="project">${g.name}</span>${g.branch ? `<span class="branchn">⎇ ${g.branch}</span>` : ''}</button>
+        <div class="sessions">${g.sessions.map(s => sessionHtml(h, s)).join('')}</div></div>`).join('');
+    if (h.recent.length) body += `<div class="section">历史项目</div>` + h.recent.map(r =>
+      `<button class="recent" data-act="recent" data-host="${h.id}" data-path="${r.path}" title="${r.path}">${FOLDER}<span class="project">${r.name}</span><span class="open">新建 Shell</span></button>`).join('');
+  }
+  return `<div class="host${offline(h) ? ' offline' : ''}">
+    <div class="host-row">${h.remote ? ICON_HOST_REMOTE : ICON_HOST_LOCAL}<span class="host-name">${h.name}</span><span class="host-addr">${h.addr}</span>${conn}
+      ${h.remote ? `<button class="more" data-act="menu" data-host="${h.id}" aria-label="主机菜单">⋯</button>` : ''}${menu}</div>
+    ${body}</div>`;
+}
+
+function titlebar(cur) {
+  const h = cur?.h;
+  const chip = h ? `<span class="host-chip${offline(h) ? ' off' : ''}"><span class="hd"></span>${h.name}${h.remote ? (offline(h) ? ' · 已断开' : ' · ' + h.latency) : ''}</span>` : '';
+  const usage = cur && cur.s.tokens && !offline(h) ? `<span class="tok">tokens ${cur.s.tokens}</span>` +
+    (cur.s.brand === 'claude' ? `<span class="quota"><span class="p">5h</span> 已用 <span class="ok">34%</span> · <span class="t">16:20</span> ｜ <span class="p">7d</span> 已用 <span class="ok">12%</span> · <span class="t">周二</span></span>` : '') : '';
+  return `<div class="titlebar"><span class="brand"><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><path d="M2 12.5h12M4.5 12.5 8 3l3.5 9.5M6 8.5h4"/></svg>Tarmac</span>${chip}${usage}
+    <span class="wctl"><span>—</span><span>▢</span><button data-act="close" aria-label="关闭窗口">✕</button></span></div>`;
+}
+
+function center(cur) {
+  if (!cur) return `<div class="overlay"><strong>暂无 agent</strong><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd> 新建 Shell，或点击左侧历史项目</span></div>`;
+  const off = offline(cur.h);
+  const text = typeof cur.s.term === 'string' && T[cur.s.term] ? T[cur.s.term] : cur.s.term;
+  return `<pre class="term${off ? ' dim' : ''}">${text}</pre>` + (off ? `<div class="overlay"><strong>与 ubuntu-ws 的连接已断开</strong>
+    <span>这个会话的 agent 仍在 ubuntu-ws 上运行。正在自动重连，连上后恢复当前画面；断开期间无法输入。</span>
+    <div class="acts"><button class="btn primary" data-act="reconnect" data-host="ws">立即重连</button></div></div>` : '');
+}
+
+function history(cur) {
+  if (!S.history) return '';
+  const h = cur?.h, s = cur?.s;
+  const records = s && s.preview ? `<article class="record"><time>14:32</time><p>${s.preview}</p></article>
+    <article class="record"><time>14:05</time><p>先看 platform.ts 里的连接入口</p></article>` : '<p style="color:var(--faint);font-size:12px">暂无输入记录</p>';
+  const hooks = !s ? '' : s.brand === 'shell' ? '不适用' : h.remote ? '已配置（ubuntu-ws 上的 ~/.claude/settings.json）' : '已配置';
+  return `<aside class="history"><div class="history-head"><h2>History</h2><span class="mode">会话</span><button class="close" data-act="hist">Ctrl+Shift+H 隐藏</button></div>
+    <div class="records">${records}</div>
+    ${s ? `<div class="diag"><dl><dt class="new">主机</dt><dd class="new">${h.name}${h.remote ? '（' + h.addr + '）' : ''}</dd>
+      <dt>目录</dt><dd>${cur.g.path}</dd><dt>hooks</dt><dd>${hooks}</dd></dl></div>` : ''}</aside>`;
+}
+
+const SIMS = {
+  first: [['ok', 'SSH 连接', '192.168.1.20:22 可以连接'], ['fail', '密钥登录', '这台主机还没有 Tarmac 的密钥，主机指纹也没有保存过']],
+  ok: [['ok', 'SSH 登录', '使用 ~/.ssh/tarmac_ed25519'], ['ok', '找到 Tarmac 0.1.0', '~/.local/opt/tarmac'], ['ok', '版本与本机一致', ''], ['ok', 'daemon 已启动', '原先未运行，已在 ubuntu-ws 上启动']],
+  password: [['ok', 'SSH 连接', '主机指纹与已保存的一致'], ['fail', '密钥登录被拒绝', '这台主机不接受 ~/.ssh/tarmac_ed25519，也没有其他可用密钥']],
+  changed: [['fail', '主机指纹已变化', '和上次保存的不一致：可能是这台机器重装了系统，也可能连到了冒充的机器']],
+  missing: [['ok', 'SSH 登录', '使用 ~/.ssh/tarmac_ed25519'], ['fail', 'ubuntu-ws 上没有 Tarmac', '先在 ubuntu-ws 上安装 Tarmac 0.1.0（pnpm desktop:entry install --package），再点「重新检查」。']],
+  version: [['ok', 'SSH 登录', '使用 ~/.ssh/tarmac_ed25519'], ['ok', '找到 Tarmac 0.2.0', '~/.local/opt/tarmac'], ['fail', '版本不一致', '本机 0.1.0，ubuntu-ws 0.2.0。把两端升级到同一版本。']],
+};
+const DEPLOY = [['ok', '用密码登录', '密码只用这一次，不保存'], ['ok', '生成密钥', '~/.ssh/tarmac_ed25519（本机已有时直接复用）'],
+  ['ok', '公钥已加入 authorized_keys', '那一行只标记 tarmac-app，不含本机名称'], ['ok', '密钥登录', '之后连接不再需要密码'],
+  ['ok', '找到 Tarmac 0.1.0', '~/.local/opt/tarmac'], ['ok', '版本与本机一致', ''], ['ok', 'daemon 已启动', '原先未运行，已在 ubuntu-ws 上启动']];
+const PRINT = { now: 'SHA256:3fKq9Zr1yW0b7m2T8vXc4nH6pLsJdA5eGuR+o1QkBVw', old: 'SHA256:Qm8Lw2cR5tYvN0aZ7kD3hF9sJ1xE4pU6gB+i2oTnHyc' };
+
+function stepsHtml(list, step, done) {
+  if (step < 0) return '';
+  return `<ol class="checks">${list.map((st, i) => {
+    const cls = i < step ? st[0] : i === step && !done ? 'run' : i <= step ? st[0] : '';
+    const mark = cls === 'ok' ? '✓' : cls === 'fail' ? '✕' : cls === 'run' ? '…' : '·';
+    return `<li class="${cls}"><span class="m">${mark}</span><span>${st[1]}${st[2] && (cls === 'ok' || cls === 'fail') ? `<small>${st[2]}</small>` : ''}</span></li>`;
+  }).join('')}</ol>`;
+}
+
+function dialog() {
+  if (S.dialog === 'add') {
+    const a = S.add;
+    const list = a.list ?? SIMS[a.sim];
+    const passed = a.done && list.every(s => s[0] === 'ok');
+    const failed = a.done && !passed;
+    // After a failed key login the dialog offers the one-time first connection.
+    let extra = '';
+    if (a.phase === 'trust') {
+      const changed = a.sim === 'changed';
+      extra = `<div class="trust${changed ? ' warn' : ''}"><b>${changed ? '主机指纹已变化，确认后才会替换' : '首次连接这台主机，请核对主机指纹'}</b>
+        <dl><dt>主机</dt><dd>192.168.1.20:22</dd><dt>ED25519</dt><dd class="fp">${PRINT.now}</dd>
+        ${changed ? `<dt>上次保存</dt><dd class="fp old">${PRINT.old}</dd>` : ''}</dl>
+        <p>可以在 ubuntu-ws 上执行 <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> 对照。接受后保存到 <code>~/.ssh/tarmac_known_hosts</code>。</p>
+        <div class="acts left"><button type="button" class="btn primary" data-act="trust">接受并保存</button><button type="button" class="btn" data-act="distrust">拒绝</button></div></div>`;
+    } else if (a.phase === 'password') {
+      extra = `<div class="trust"><b>用密码登录一次，部署 Tarmac 的密钥</b>
+        <label class="field">dev@192.168.1.20 的密码<input id="f-pass" type="password" value="example-only" autocomplete="off"></label>
+        <p>密码只用这一次，不保存。Tarmac 会在本机 <code>~/.ssh/tarmac_ed25519</code> 生成密钥（已有则复用），把公钥追加到 ubuntu-ws 的 <code>~/.ssh/authorized_keys</code>，那一行只标记 <code>tarmac-app</code>，不含本机名称，移除主机时可以一并删掉。</p>
+        <div class="acts left"><button type="button" class="btn primary" data-act="deploy">用密码登录并部署密钥</button></div></div>`;
+    } else if (a.phase === 'distrusted') {
+      extra = `<p class="refused">已拒绝这个指纹，没有连接。确认是正确的机器后再重新检查。</p>`;
+    }
+    return `<div class="scrim"><form class="dialog" id="addform" aria-label="添加远程主机">
+      <h3>添加远程主机</h3>
+      <p>Tarmac 用 SSH 连接这台机器上的 daemon，不开放新端口。agent、hooks 和用量都在那台机器上处理。</p>
+      <div class="fields">
+        <label class="field wide">地址<input id="f-addr" value="192.168.1.20"><span class="hint">局域网 IP、主机名，或 ~/.ssh/config 里的 Host 名</span></label>
+        <label class="field">用户名<input id="f-user" value="dev"></label>
+        <label class="field">端口<input id="f-port" value="22"></label>
+        <label class="field wide">显示名称<input id="f-name" value="ubuntu-ws"></label>
+      </div>
+      ${stepsHtml(list, a.step, a.done)}
+      ${extra}
+      <div class="acts"><button type="button" class="btn" data-act="cancel">取消</button>
+        ${passed ? '<button type="button" class="btn primary" data-act="confirm-add">添加</button>'
+          : a.phase === 'trust' || a.phase === 'password' ? ''
+          : `<button type="submit" class="btn primary"${a.step >= 0 && !a.done ? ' disabled' : ''}>${failed ? '重新检查' : '连接并检查'}</button>`}</div>
+      <div class="sim">原型控制：模拟情况 <select id="f-sim">
+        <option value="first"${a.sim === 'first' ? ' selected' : ''}>首次连接（需要密码）</option>
+        <option value="ok"${a.sim === 'ok' ? ' selected' : ''}>已有密钥，全部通过</option>
+        <option value="password"${a.sim === 'password' ? ' selected' : ''}>指纹已知，密钥被拒绝</option>
+        <option value="changed"${a.sim === 'changed' ? ' selected' : ''}>主机指纹已变化</option>
+        <option value="missing"${a.sim === 'missing' ? ' selected' : ''}>未安装 Tarmac</option>
+        <option value="version"${a.sim === 'version' ? ' selected' : ''}>版本不一致</option></select></div>
+    </form></div>`;
+  }
+  if (S.dialog === 'close') {
+    return `<div class="scrim"><div class="dialog" role="dialog" aria-label="关闭 Tarmac">
+      <h3>关闭 Tarmac？</h3>
+      <div class="split">
+        <div><span>本机 · 1 个会话</span><span class="end">将结束</span></div>
+        <div><span>ubuntu-ws · 4 个会话</span><span class="keep">继续运行</span></div>
+      </div>
+      <p>远程主机上的 agent 不受影响，下次打开 Tarmac 时自动重连并恢复画面。</p>
+      <div class="acts"><button class="btn" data-act="cancel">取消</button><button class="btn danger" data-act="toast-close">结束本机会话并关闭</button></div>
+    </div></div>`;
+  }
+  if (S.dialog === 'remove') {
+    return `<div class="scrim"><div class="dialog" role="dialog" aria-label="移除主机">
+      <h3>移除 ubuntu-ws？</h3>
+      <p>Tarmac 不再连接这台主机，左栏不再显示它的会话。ubuntu-ws 上正在运行的 4 个会话不会被结束，之后重新添加即可看到。</p>
+      <label class="check"><input id="f-revoke" type="checkbox" checked> 同时删除 ubuntu-ws 上 authorized_keys 中的 Tarmac 公钥（只删与本机公钥一致、标记为 tarmac-app 的那一行）</label>
+      <div class="acts"><button class="btn" data-act="cancel">取消</button><button class="btn danger" data-act="confirm-remove">移除</button></div>
+    </div></div>`;
+  }
+  return '';
+}
+
+function render() {
+  const visible = S.hosts.filter(h => !(h.remote && (S.removed || (scene === 'add' && !S.add.added))));
+  let cur = find(S.active);
+  if (cur && !visible.includes(cur.h)) cur = null;
+  if (cur && mismatch(cur.h)) cur = null;
+  if (!cur) { const first = visible.flatMap(h => mismatch(h) ? [] : h.groups.flatMap(g => g.sessions))[0]; if (first) { S.active = first.id; cur = find(first.id); } }
+  const win = document.getElementById('win');
+  win.innerHTML = titlebar(cur) + `<div class="app${S.history ? ' with-history' : ''}">
+    <aside class="side"><div class="side-body">${visible.map(hostHtml).join('')}
+      <button class="add-host" data-act="add">＋ 添加远程主机</button></div>
+      <div class="side-foot"><div class="keys"><button data-act="hist"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd>历史</button>
+        <button data-act="new"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd>新建</button></div></div></aside>
+    <main class="center">${center(cur)}</main>${history(cur)}</div>${dialog()}${S.toast ? `<div class="toast" role="status">${S.toast}</div>` : ''}`;
+  document.getElementById('notes').innerHTML = NOTES[scene];
+  document.querySelectorAll('.scenes button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scene === scene)));
+}
+
+function runSteps(list, after) {
+  clearInterval(stepTimer);
+  S.add.list = list; S.add.step = 0; S.add.done = false; render();
+  stepTimer = setInterval(() => {
+    if (S.add.step >= list.length - 1) { S.add.done = true; clearInterval(stepTimer); after?.(); render(); return; }
+    S.add.step++; render();
+  }, 500);
+}
+function runChecks() {
+  S.add.phase = undefined;
+  runSteps(SIMS[S.add.sim], () => {
+    if (S.add.sim === 'first' || S.add.sim === 'changed') S.add.phase = 'trust';
+    else if (S.add.sim === 'password') S.add.phase = 'password';
+  });
+}
+
+function setScene(next) {
+  clearInterval(stepTimer);
+  scene = next; S = initial();
+  if (scene === 'add') { S.dialog = 'add'; S.active = 's5'; }
+  if (scene === 'close') S.dialog = 'close';
+  if (scene === 'mismatch') S.active = 's5';
+  render();
+}
+
+document.querySelector('.scenes').addEventListener('click', e => { const b = e.target.closest('button[data-scene]'); if (b) setScene(b.dataset.scene); });
+
+document.getElementById('win').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) { if (S.menu) { S.menu = null; render(); } return; }
+  const act = b.dataset.act;
+  if (act !== 'menu') S.menu = null;
+  if (act === 'session') { S.active = b.dataset.id; render(); }
+  else if (act === 'toggle') { const g = host(b.dataset.host).groups.find(x => x.path === b.dataset.path); g.collapsed = !g.collapsed; render(); }
+  else if (act === 'menu') { S.menu = S.menu === b.dataset.host ? null : b.dataset.host; render(); }
+  else if (act === 'hist') { S.history = !S.history; render(); }
+  else if (act === 'new' || act === 'recent') {
+    const cur = find(S.active);
+    const h = act === 'recent' ? host(b.dataset.host) : cur ? cur.h : host('local');
+    if (offline(h)) { toast(`ubuntu-ws 已断开，重连后才能新建`); return; }
+    const path = act === 'recent' ? b.dataset.path : cur ? cur.g.path : h.groups[0].path;
+    let g = h.groups.find(x => x.path === path);
+    if (!g) { g = { path, name: path.split(/[\\/]/).pop(), collapsed: false, sessions: [] }; h.groups.push(g); h.recent = h.recent.filter(r => r.path !== path); }
+    const id = 's' + S.seq++;
+    g.sessions.push({ id, brand: 'shell', name: h.remote ? 'bash' : 'PowerShell', state: 'running', preview: '', term: T.newShell(h.id, path) });
+    S.active = id;
+    toast(`已在 ${h.name} 的 ${g.name} 新建 Shell`);
+  }
+  else if (act === 'reconnect') {
+    if (scene === 'offline') { scene = 'normal'; S.history = true; toast('已重连 ubuntu-ws，画面已恢复'); }
+    else toast('ubuntu-ws 已连接，延迟 2 ms');
+  }
+  else if (act === 'disconnect') { scene = 'offline'; render(); }
+  else if (act === 'edit') { S.dialog = 'add'; S.add = { sim: 'ok', step: -1, done: false, added: true }; render(); }
+  else if (act === 'trust') {
+    if (S.add.sim === 'changed') runSteps([['ok', '主机指纹已更新', '~/.ssh/tarmac_known_hosts 中这台主机的记录已替换'], ...SIMS.ok]);
+    else { S.add.phase = 'password'; S.add.list = [...SIMS.first.slice(0, 1), ['ok', '主机指纹已保存', '~/.ssh/tarmac_known_hosts']]; S.add.step = 1; render(); }
+  }
+  else if (act === 'distrust') { S.add.phase = 'distrusted'; render(); }
+  else if (act === 'deploy') { const kept = (S.add.list ?? []).filter(st => st[0] === 'ok'); S.add.phase = 'deploying'; runSteps([...kept, ...DEPLOY]); }
+  else if (act === 'remove') { S.dialog = 'remove'; render(); }
+  else if (act === 'confirm-remove') { const revoke = document.getElementById('f-revoke')?.checked; S.dialog = null; S.removed = true;
+    toast(revoke ? '已移除 ubuntu-ws，并删除了那里的 Tarmac 公钥；会话未受影响' : '已移除 ubuntu-ws，那台机器上的会话未受影响'); }
+  else if (act === 'add') { S.dialog = 'add'; S.add = { sim: 'first', step: -1, done: false, added: S.add.added }; S.removed = false; render(); }
+  else if (act === 'cancel') { clearInterval(stepTimer); S.dialog = null; render(); }
+  else if (act === 'confirm-add') { S.dialog = null; S.add.added = true; S.removed = false; S.active = 's1'; toast('已添加 ubuntu-ws，读到 4 个会话'); }
+  else if (act === 'close') { S.dialog = 'close'; render(); }
+  else if (act === 'toast-close') { S.dialog = null; toast('原型：窗口关闭，本机 PowerShell 已结束，ubuntu-ws 会话保留'); }
+  else if (act === 'toast') toast(b.dataset.msg);
+});
+
+document.getElementById('win').addEventListener('submit', e => { e.preventDefault(); runChecks(); });
+document.getElementById('win').addEventListener('change', e => {
+  if (e.target.id === 'f-sim') { clearInterval(stepTimer); S.add = { sim: e.target.value, step: -1, done: false, added: S.add.added }; render(); }
+});
+
+const NOTES = {
+  normal: `<section class="card"><h2>这一屏要看的</h2><ol>
+    <li><b>左栏先分主机，再分目录。</b>远程主机排在前面，标题行显示地址和延迟；本机放在后面，标为「本机」。</li>
+    <li><b>标题栏的主机标签</b>说明当前会话在哪台机器上，token 和额度照旧显示。</li>
+    <li><b>新建跟随当前会话。</b>按 <code>Ctrl+Shift+N</code> 会在当前会话所在主机和目录开一个 Shell；点某台主机下的历史项目，就在那台主机上新建。没有单独的「选主机」步骤。</li>
+    <li><b>右栏多一行「主机」。</b>远程会话的 hooks 状态写明是哪台机器上的配置。</li>
+    <li><b>主机菜单（⋯）</b>可以重连、断开、编辑和移除。</li></ol></section>
+    <section class="card"><h2>和现在一样的地方</h2><ul>
+    <li>会话状态、输入记录、token、额度的显示规则不变，都由远程 daemon 算好再发过来。</li>
+    <li>中栏仍是 agent 自己的终端，键盘输入直接发到 Linux 上的 PTY。</li></ul></section>
+    <section class="card ask"><h2>需要你确认</h2><ul>
+    <li>远程主机排在本机前面，还是固定把本机放第一？原型按「agent 主要在远程」把远程放前面。</li>
+    <li>远程会话的 hooks 安装卡片不在 App 里弹出，改到那台机器上用 CLI 装。这样是否可以接受？</li></ul></section>`,
+  add: `<section class="card"><h2>这一屏要看的</h2><ol>
+    <li><b>先按密钥检查。</b>本机已能免密登录的主机直接全部通过（模拟情况选「已有密钥」）。</li>
+    <li><b>密钥登录失败时转入首次连接。</b>先核对主机指纹，点「接受并保存」写入 <code>~/.ssh/tarmac_known_hosts</code>；再填一次密码，部署 Tarmac 的密钥，之后自动重跑检查清单。</li>
+    <li><b>Tarmac 的 SSH 文件都以 tarmac_ 开头</b>，放在本机 <code>~/.ssh/</code>：<code>tarmac_ed25519</code>、<code>tarmac_ed25519.pub</code>、<code>tarmac_known_hosts</code>。只新建，不改动已有的 <code>id_*</code> 和 <code>known_hosts</code>。</li>
+    <li><b>密码只用一次</b>，不保存、不写日志，也没有「记住密码」。</li>
+    <li><b>指纹变化时拒绝连接</b>，同时显示新旧指纹，你重新接受后才替换（模拟情况选「主机指纹已变化」）。</li>
+    <li>移除主机时可以勾选，一并删掉对方 authorized_keys 里那一行（切到「⑤」之前，在主机菜单点「从列表移除」看）。</li></ol></section>
+    <section class="card ask"><h2>需要你确认</h2><ul>
+    <li>部署密钥会修改对方的 <code>~/.ssh/authorized_keys</code>（只追加一行，带标记）。点「用密码登录并部署密钥」即视为授权，不再二次确认。</li>
+    <li>实现会新增 <code>ssh2</code> 依赖，只用于这一次性的首次连接；日常连接仍走系统 ssh。</li></ul></section>`,
+  offline: `<section class="card"><h2>这一屏要看的</h2><ol>
+    <li><b>只影响这台主机。</b>ubuntu-ws 的标题行变红、显示重连倒计时；本机会话照常使用，可以点本机的 PowerShell 试试。</li>
+    <li><b>断开期间保留旧画面，但变暗。</b>会话状态改为「状态未知」，不冒充实时状态；中栏提示 agent 仍在远程运行，并禁止输入，避免按键丢失。</li>
+    <li><b>自动重连</b>，也可以手动「立即重连」。连上后用现有的 resync 恢复画面和状态。</li>
+    <li>断开时不能在这台主机上新建会话，点「新建」会提示原因。</li></ol></section>
+    <section class="card ask"><h2>需要你确认</h2><ul>
+    <li>重连间隔：原型按 1、2、4、8 秒递增，最长 30 秒。局域网里一般几秒内就能连上。</li></ul></section>`,
+  mismatch: `<section class="card"><h2>这一屏要看的</h2><ol>
+    <li><b>版本不一致就不连接。</b>两端协议必须一致，否则状态和用量可能解析错。现有的版本握手已经会拒绝，这里只是把拒绝原因说清楚。</li>
+    <li>提示里写明两端各是什么版本、怎么处理，并说明远程 agent 不受影响。</li>
+    <li>本机会话不受影响。</li></ol></section>
+    <section class="card ask"><h2>需要你确认</h2><ul>
+    <li>是否允许「新版 App 连旧版 daemon」这种向下兼容？原型按最简单的做法：版本必须一致。</li></ul></section>`,
+  close: `<section class="card"><h2>这一屏要看的</h2><ol>
+    <li><b>关闭时分开说明。</b>本机会话按现有规则在确认后结束；远程会话继续运行，这是远程模式的意义。</li>
+    <li>只有远程会话、没有本机会话时，关闭不再弹确认框，直接关闭。</li>
+    <li>下次打开 Tarmac 自动连接已保存的主机，恢复会话列表和画面。</li></ol></section>
+    <section class="card ask"><h2>需要你确认</h2><ul>
+    <li>要不要给远程会话也提供「关闭时一并结束」的选项？原型没有做，默认一律保留。</li></ul></section>`,
+};
+
+render();
+</script>

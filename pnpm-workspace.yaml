@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  # ssh2's optional native crypto is not built: its pure JS path also runs in the Windows package.
+  cpu-features: false
+  electron: true
+  esbuild: true
+  node-pty: true
+  ssh2: false
+minimumReleaseAgeExclude:
+  - electron@45.3.1
+patchedDependencies:
+  '@xterm/addon-webgl@0.19.0': patches/@xterm__addon-webgl@0.19.0.patch

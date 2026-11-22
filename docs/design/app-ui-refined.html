@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarmac App UI 优化设计稿</title>
+<style>
+:root {
+  --bg: #121417;
+  --side: #171a1e;
+  --raise: #1e2227;
+  --raise-strong: #262c32;
+  --line: #292f35;
+  --text: #e4e7ea;
+  --dim: #a4abb3;
+  --faint: #7d858e;
+  --accent: #4fd1c5;
+  --accent-ink: #102725;
+  --branch-fg: #d5a9c6;
+  --branch-bg: #32232f;
+  --working: #f0a54a;
+  --waiting: #5fd787;
+  --approval: #ff7474;
+  --idle: #8a9199;
+  --running: #cfd3d8;
+  --claude: #e8835f;
+  --codex: #d4d8dc;
+  --kimi: #87afff;
+  --agy: #8c9eff;
+  --shell: #9aa1a9;
+  --mono: "Ubuntu Sans Mono", "SFMono-Regular", Menlo, "MiSans", monospace;
+  --ui: "Ubuntu", "MiSans", -apple-system, "PingFang SC", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--ui);
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+button, .record { -webkit-tap-highlight-color: transparent; }
+.titlebar { display: flex; align-items: center; height: 36px; flex: none; padding: 0 16px; background: var(--bg); color: var(--dim); font-size: 12px; user-select: none; }
+.token-usage { margin-left: 24px; font-family: var(--mono); color: #fab387; }
+.app { position: relative; display: grid; grid-template-columns: 300px minmax(0, 1fr); flex: 1; min-height: 0; }
+.app.with-history { grid-template-columns: 300px minmax(0, 1fr) 320px; }
+.side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--side);
+  border-right: 1px solid var(--line);
+  user-select: none;
+}
+.side-head { display: flex; align-items: baseline; gap: 9px; min-height: 54px; padding: 16px 18px 10px; }
+.side-head h1 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: .02em; }
+.count { color: var(--faint); font-size: 12px; }
+.side-body { flex: 1; overflow: auto; padding: 0 9px 14px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.section { margin: 10px 9px 5px; color: var(--faint); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+.recent-title { margin-top: 20px; }
+.group + .group { margin-top: 10px; }
+.group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-align: left;
+  transition: background .12s ease;
+}
+.group-row:hover, .session:hover, .recent:hover { background: var(--raise); }
+.chev { width: 12px; flex: none; color: var(--faint); transition: transform .12s ease; }
+.group.collapsed .chev { transform: rotate(-90deg); }
+.folder { width: 15px; height: 15px; flex: none; color: var(--faint); }
+.project { flex: 1 1 auto; min-width: 56px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--text); }
+.branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 52%;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--branch-bg);
+  color: var(--branch-fg);
+  font: 11.5px/19px var(--mono);
+}
+.branch-icon { width: 12px; height: 12px; flex: none; }
+.branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sessions { margin-left: 16px; padding-left: 10px; border-left: 1px solid var(--line); }
+.group.collapsed .sessions { display: none; }
+.session {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 3px;
+  padding: 7px 8px 8px;
+  border-radius: 6px;
+  text-align: left;
+  transition: background .12s ease;
+}
+.session.active { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.session.active::before {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.identity { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.logo {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  flex: none;
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  font: 12px/1 var(--mono);
+}
+.brand-icon { display: block; width: 16px; height: 16px; overflow: visible; }
+.brand { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; white-space: nowrap; }
+.state { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--dim); font-size: 12px; white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.state.working { color: var(--working); }
+.state.working .dot { animation: pulse 1.4s ease-in-out infinite; }
+.state.waiting { color: var(--waiting); }
+.state.permission { color: var(--approval); }
+.state.idle { color: var(--idle); }
+.state.running { color: var(--running); }
+.state span:last-child { color: var(--dim); }
+@keyframes pulse { 50% { opacity: .35; } }
+.unread {
+  margin-left: auto;
+  flex: none;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--working) 17%, transparent);
+  color: var(--working);
+  font: 600 11px/17px var(--mono);
+}
+.preview { display: block; margin: 4px 0 0 26px; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session.active .preview { color: #c9ced3; }
+.preview.hint { color: var(--approval); }
+.recent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-align: left;
+  transition: background .12s ease;
+}
+.recent .project { font-weight: 500; color: var(--dim); }
+.recent .open { margin-left: auto; flex: none; color: var(--faint); font-size: 11.5px; opacity: 0; }
+.recent:hover .open, .recent:focus-visible .open { opacity: 1; }
+.side-foot { padding: 10px 16px 13px; border-top: 1px solid var(--line); }
+.error { margin-bottom: 9px; padding: 7px 9px; border-radius: 6px; color: var(--approval); font-size: 12px; overflow-wrap: anywhere; background: color-mix(in srgb, var(--approval) 11%, transparent); }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--dim); font-size: 12px; }
+.keys button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; border-radius: 5px; }
+.keys button:hover { color: var(--text); }
+kbd { display: inline-flex; align-items: center; justify-content: center; min-height: 19px; padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); font: 11px/16px var(--mono); background: var(--raise); }
+.center { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg); }
+.terminal-screen {
+  position: absolute;
+  inset: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text);
+  font: 16px/22px var(--mono);
+  white-space: pre;
+}
+.terminal-bottom { margin-top: auto; padding-top: 22px; }
+.t-dim { color: #8b939b; }
+.t-blue { color: #6cb6ff; }
+.t-green { color: #7ee787; }
+.t-yellow { color: #e3b341; }
+.t-pink { color: #f778ba; }
+.t-warn { color: #d29922; }
+.t-bold { font-weight: 700; }
+.cursor { background: var(--text); color: var(--bg); }
+.empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; padding: 28px; text-align: center; }
+.empty-mark { margin-bottom: 14px; color: var(--faint); font: 26px/1 var(--mono); }
+.empty strong { color: var(--text); font-weight: 600; font-size: 17px; }
+.empty p { max-width: 390px; margin: 10px 0 20px; color: var(--dim); font-size: 13px; line-height: 1.7; }
+.primary { display: inline-flex; align-items: center; gap: 18px; min-height: 38px; padding: 0 9px 0 15px; border-radius: 7px; background: var(--accent); color: var(--accent-ink); font-weight: 650; transition: background .12s ease, transform .12s ease; }
+.primary:hover { background: #68dcd1; }
+.primary:active { transform: translateY(1px); }
+.primary kbd { border-color: #2e9289; color: var(--accent-ink); background: #ffffff24; }
+.empty-secondary { margin-top: 14px; color: var(--faint); font-size: 12px; }
+.history {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--side);
+  border-left: 1px solid var(--line);
+}
+.history-head { display: flex; align-items: center; gap: 8px; min-height: 54px; padding: 12px 12px 9px 16px; border-bottom: 1px solid var(--line); }
+.history-head h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.mode { color: var(--faint); font-size: 12px; }
+.close { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 32px; min-height: 32px; margin-left: auto; padding: 0 6px; border-radius: 5px; color: var(--faint); font-size: 12px; }
+.close:hover { color: var(--text); background: var(--raise); }
+.close svg { width: 14px; height: 14px; }
+.records { flex: 1; overflow: auto; padding: 0 16px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.day { margin: 16px 0 3px; color: var(--faint); font-size: 11.5px; font-weight: 600; }
+.record { display: block; width: 100%; padding: 11px 2px; border-bottom: 1px solid var(--line); text-align: left; border-radius: 0; }
+.record:hover { background: #ffffff03; }
+.record-meta { display: flex; align-items: center; justify-content: space-between; color: var(--faint); }
+.record time { font: 11.5px var(--mono); }
+.expand { font-size: 11px; opacity: 0; }
+.record:hover .expand, .record:focus-visible .expand, .record[aria-expanded="true"] .expand { opacity: 1; }
+.record p { margin: 5px 0 0; color: #d2d6da; font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.record[aria-expanded="true"] p { display: block; overflow: visible; }
+.none { margin: 22px 0; color: var(--dim); line-height: 1.7; }
+.none strong { display: block; margin-bottom: 4px; color: var(--text); font-weight: 500; }
+.diag { padding: 12px 16px 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; }
+.diag h3 { margin: 0 0 8px; color: var(--faint); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; }
+.diag dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.diag dt { color: var(--faint); }
+.diag dd { margin: 0; overflow-wrap: anywhere; }
+.diag p { margin: 8px 0 0; overflow-wrap: anywhere; }
+.diag .alert { color: var(--approval); }
+.prototype {
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 42px;
+  padding: 5px 14px;
+  border-top: 1px solid var(--line);
+  background: #0e1013;
+  color: var(--faint);
+  font-size: 12px;
+}
+.prototype-label { margin-right: 8px; }
+.prototype button { min-height: 28px; padding: 0 10px; border-radius: 5px; color: var(--dim); }
+.prototype button:hover { background: var(--raise); color: var(--text); }
+.prototype button[aria-pressed="true"] { background: var(--raise-strong); color: var(--text); }
+.prototype-note { margin-left: 12px; color: var(--faint); }
+@media (max-width: 1100px) {
+  .app, .app.with-history { grid-template-columns: 288px minmax(0, 1fr); }
+  .history { position: absolute; z-index: 5; top: 0; right: 0; bottom: 0; width: min(340px, calc(100% - 288px)); box-shadow: -16px 0 36px #00000052; }
+}
+@media (max-width: 900px) {
+  .app, .app.with-history { grid-template-columns: 248px minmax(0, 1fr); }
+  .history { width: min(330px, calc(100% - 248px)); }
+  .prototype-note { display: none; }
+}
+@media (max-width: 680px) {
+  .app, .app.with-history { grid-template-columns: 210px minmax(0, 1fr); }
+  .branch { display: none; }
+  .state span:last-child { display: none; }
+  .history { width: calc(100% - 210px); }
+  .terminal-screen { inset-inline: 12px; font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <symbol id="logo-claude" viewBox="0 0 24 24">
+      <path fill="#D97757" fill-rule="nonzero" d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/>
+    </symbol>
+    <symbol id="logo-openai" viewBox="0 0 24 24">
+      <path fill="currentColor" fill-rule="evenodd" d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"/>
+    </symbol>
+    <symbol id="logo-kimi" viewBox="0 0 24 24">
+      <path fill="#1783FF" d="M21.846 0a1.923 1.923 0 110 3.846H20.15a.226.226 0 01-.227-.226V1.923C19.923.861 20.784 0 21.846 0z"/>
+      <path fill="currentColor" d="M11.065 11.199l7.257-7.2c.137-.136.06-.41-.116-.41H14.3a.164.164 0 00-.117.051l-7.82 7.756c-.122.12-.302.013-.302-.179V3.82c0-.127-.083-.23-.185-.23H3.186c-.103 0-.186.103-.186.23V19.77c0 .128.083.23.186.23h2.69c.103 0 .186-.102.186-.23v-3.25c0-.069.025-.135.069-.178l2.424-2.406a.158.158 0 01.205-.023l6.484 4.772a7.677 7.677 0 003.453 1.283c.108.012.2-.095.2-.23v-3.06c0-.117-.07-.212-.164-.227a5.028 5.028 0 01-2.027-.807l-5.613-4.064c-.117-.078-.132-.279-.028-.381z"/>
+    </symbol>
+    <symbol id="logo-antigravity" viewBox="0 0 24 24">
+      <mask id="ag-mask" maskUnits="userSpaceOnUse" width="24" height="23" x="0" y="1"><path fill="#fff" d="M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z"/></mask>
+      <g mask="url(#ag-mask)">
+        <g filter="url(#ag-filter-1)"><path fill="#FFE432" d="M-1.018-3.992c-.408 3.591 2.686 6.89 6.91 7.37 4.225.48 7.98-2.043 8.387-5.633.408-3.59-2.686-6.89-6.91-7.37-4.225-.479-7.98 2.043-8.387 5.633z"/></g>
+        <g filter="url(#ag-filter-2)"><path fill="#FC413D" d="M15.269 7.747c1.058 4.557 5.691 7.374 10.348 6.293 4.657-1.082 7.575-5.653 6.516-10.21-1.058-4.556-5.691-7.374-10.348-6.292-4.657 1.082-7.575 5.653-6.516 10.21z"/></g>
+        <g filter="url(#ag-filter-3)"><path fill="#00B95C" d="M-12.443 10.804c1.338 4.703 7.36 7.11 13.453 5.378 6.092-1.733 9.947-6.95 8.61-11.652C8.282-.173 2.26-2.58-3.833-.848-9.925.884-13.78 6.1-12.443 10.804z"/></g>
+        <g filter="url(#ag-filter-4)"><path fill="#00B95C" d="M-7.608 14.703c3.352 3.424 9.126 3.208 12.896-.483 3.77-3.69 4.108-9.459.756-12.883C2.69-2.087-3.083-1.871-6.853 1.82c-3.77 3.69-4.108 9.458-.755 12.883z"/></g>
+        <g filter="url(#ag-filter-5)"><path fill="#3186FF" d="M9.932 27.617c1.04 4.482 5.384 7.303 9.7 6.3 4.316-1.002 6.971-5.448 5.93-9.93-1.04-4.483-5.384-7.304-9.7-6.301-4.316 1.002-6.971 5.448-5.93 9.93z"/></g>
+        <g filter="url(#ag-filter-6)"><path fill="#FBBC04" d="M2.572-8.185C.392-3.329 2.778 2.472 7.9 4.771c5.122 2.3 11.042.227 13.222-4.63 2.18-4.855-.205-10.656-5.327-12.955-5.122-2.3-11.042-.227-13.222 4.63z"/></g>
+        <g filter="url(#ag-filter-7)"><path fill="#3186FF" d="M-3.267 38.686c-5.277-2.072 3.742-19.117 5.984-24.83 2.243-5.712 8.34-8.664 13.616-6.592 5.278 2.071 11.533 13.482 9.29 19.195-2.242 5.713-23.613 14.298-28.89 12.227z"/></g>
+        <g filter="url(#ag-filter-8)"><path fill="#749BFF" d="M28.71 17.471c-1.413 1.649-5.1.808-8.236-1.878-3.135-2.687-4.531-6.201-3.118-7.85 1.412-1.649 5.1-.808 8.235 1.878s4.532 6.2 3.119 7.85z"/></g>
+        <g filter="url(#ag-filter-9)"><path fill="#FC413D" d="M18.163 9.077c5.81 3.93 12.502 4.19 14.946.577 2.443-3.612-.287-9.727-6.098-13.658-5.81-3.931-12.502-4.19-14.946-.577-2.443 3.612.287 9.727 6.098 13.658z"/></g>
+        <g filter="url(#ag-filter-10)"><path fill="#FFEE48" d="M-.915 2.684c-1.44 3.473-.97 6.967 1.05 7.804 2.02.837 4.824-1.3 6.264-4.772 1.44-3.473.97-6.967-1.05-7.804-2.02-.837-4.824 1.3-6.264 4.772z"/></g>
+      </g>
+      <filter id="ag-filter-1" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-3.288" y="-11.917" width="19.838" height="17.587"><feGaussianBlur stdDeviation="1.117"/></filter>
+      <filter id="ag-filter-2" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="4.251" y="-13.493" width="38.9" height="38.565"><feGaussianBlur stdDeviation="5.4"/></filter>
+      <filter id="ag-filter-3" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-21.889" y="-10.592" width="40.955" height="36.517"><feGaussianBlur stdDeviation="4.591"/></filter>
+      <filter id="ag-filter-4" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-19.099" y="-10.278" width="36.632" height="36.595"><feGaussianBlur stdDeviation="4.591"/></filter>
+      <filter id="ag-filter-5" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x=".981" y="8.758" width="33.533" height="34.087"><feGaussianBlur stdDeviation="4.363"/></filter>
+      <filter id="ag-filter-6" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-6.143" y="-21.659" width="35.978" height="35.276"><feGaussianBlur stdDeviation="3.954"/></filter>
+      <filter id="ag-filter-7" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-11.96" y="-.46" width="45.114" height="46.523"><feGaussianBlur stdDeviation="3.531"/></filter>
+      <filter id="ag-filter-8" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="10.485" y=".58" width="25.094" height="24.054"><feGaussianBlur stdDeviation="3.159"/></filter>
+      <filter id="ag-filter-9" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="5.833" y="-12.467" width="33.508" height="30.007"><feGaussianBlur stdDeviation="2.669"/></filter>
+      <filter id="ag-filter-10" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse" x="-8.355" y="-8.876" width="22.194" height="26.151"><feGaussianBlur stdDeviation="3.303"/></filter>
+    </symbol>
+    <symbol id="logo-shell" viewBox="0 0 24 24">
+      <path d="m5 7 5 5-5 5M12 17h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-git-branch" viewBox="0 0 24 24">
+      <path d="M6 3v12M18 9a9 9 0 0 1-9 9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    </symbol>
+  </defs>
+</svg>
+<header class="titlebar"><span>Tarmac</span><span class="token-usage" id="token-usage"></span></header>
+<div class="app" id="app">
+  <aside class="side" aria-label="会话">
+    <div class="side-head"><h1>Agents</h1><span class="count" id="count"></span></div>
+    <div class="side-body" id="sidebar"></div>
+    <div class="side-foot">
+      <div id="error"></div>
+      <div class="keys">
+        <button data-action="history"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd>输入记录</button>
+        <button data-action="new"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd>新建 Shell</button>
+      </div>
+    </div>
+  </aside>
+  <main class="center" id="center" aria-label="会话终端"></main>
+  <aside class="history" id="history" aria-label="输入记录" hidden></aside>
+</div>
+<nav class="prototype" aria-label="设计稿场景">
+  <span class="prototype-label">设计场景</span>
+  <button data-scene="multi" aria-pressed="true">多会话</button>
+  <button data-scene="empty" aria-pressed="false">空状态</button>
+  <button data-action="history" aria-pressed="false">切换输入记录</button>
+  <span class="prototype-note">缩窄窗口可查看右栏覆盖模式 · 点击消息可展开</span>
+</nav>
+<script>
+const brands = {
+  claude: { icon: 'claude', name: 'Claude', color: 'var(--claude)' },
+  codex: { icon: 'openai', name: 'Codex', color: 'var(--codex)' },
+  kimi: { icon: 'kimi', name: 'Kimi', color: 'var(--kimi)' },
+  agy: { icon: 'antigravity', name: 'Antigravity', color: 'var(--agy)' },
+  shell: { icon: 'shell', name: 'Shell', color: 'var(--shell)' },
+};
+const brandIcon = brand => `<svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#logo-${brands[brand].icon}"></use></svg>`;
+const states = {
+  working: '工作中', waiting: '等待输入', permission: '等待授权', idle: '空闲', running: '运行中',
+};
+const folder = '<svg class="folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.1l1.4 1.6h5.5c.7 0 1.2.5 1.2 1.2v6.1c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>';
+const chevron = '<svg class="chev" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.5 4.2h7L6 8.3z"/></svg>';
+const scenes = {
+  multi: {
+    groups: [
+      { path: '013-SK-V500', branch: 'feat/chenhao-probe', sessions: [
+        { id: 'a', brand: 'codex', tokens: 86540, state: 'working', preview: '修复探头温度上报偶发丢帧，先补复现用例', records: [
+          { at: '09:42', text: '修复探头温度上报偶发丢帧，先补复现用例' },
+        ] },
+        { id: 'b', brand: 'claude', state: 'permission', preview: '', unread: 1, records: [
+          { at: '09:36', text: '检查温度采集服务为什么会在重启后丢失配置' },
+        ] },
+      ] },
+      { path: 'tarmac', branch: 'app-architecture', sessions: [
+        { id: 'c', brand: 'claude', tokens: 1234567, state: 'working', preview: '按这个顺序开始做', unread: 2, records: [
+          { at: '20:41', text: '中文可以输入' },
+          { at: '20:52', text: '按这个顺序开始做' },
+          { at: '21:10', text: '我只是要内容一样不是要背景一样，\n已重新设计一版UI\n你重新设计\n（第四行在列表中折叠，点击后展开）' },
+        ] },
+        { id: 'k', brand: 'kimi', state: 'waiting', preview: '整理本轮修改并给出验证结果', records: [
+          { at: '21:16', text: '整理本轮修改并给出验证结果' },
+        ] },
+        { id: 'g', brand: 'agy', state: 'running', preview: '检查桌面端窗口与终端的尺寸同步', records: [
+          { at: '21:18', text: '检查桌面端窗口与终端的尺寸同步' },
+        ] },
+        { id: 'd', brand: 'shell', preview: '', records: [] },
+      ] },
+    ],
+    recent: ['web-console', 'mobile-app', 'chat-bot', 'notes', 'android-demo', 'data-pipeline', 'docs-site', 'firmware-tools', 'api-gateway', 'sim-lab'],
+    active: 'c',
+  },
+  empty: {
+    groups: [],
+    recent: ['tarmac', 'web-console', 'mobile-app'],
+    active: null,
+  },
+};
+let scene = structuredClone(scenes.multi);
+let collapsed = new Set();
+let expanded = new Set();
+let historyVisible = false;
+let sequence = 0;
+const esc = value => String(value).replace(/[&<>"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
+const allSessions = () => scene.groups.flatMap(group => group.sessions);
+const activeSession = () => allSessions().find(session => session.id === scene.active);
+function sessionHTML(session) {
+  const brand = brands[session.brand];
+  const hint = session.state === 'permission';
+  const preview = hint ? '需要你选择，切过去处理' : session.preview;
+  return `<button class="session${scene.active === session.id ? ' active' : ''}" data-session="${session.id}" aria-label="切换到 ${brand.name}">
+    <span class="identity">
+      <span class="logo" style="color:${brand.color}">${brandIcon(session.brand)}</span>
+      <span class="brand">${brand.name}</span>
+      ${session.state ? `<span class="state ${session.state}"><span class="dot"></span><span>${states[session.state]}</span></span>` : ''}
+      ${session.unread ? `<span class="unread">+${session.unread}</span>` : ''}
+    </span>
+    ${preview ? `<span class="preview${hint ? ' hint' : ''}">${esc(preview)}</span>` : ''}
+  </button>`;
+}
+function renderSidebar() {
+  const sessions = allSessions();
+  document.getElementById('count').textContent = sessions.length ? `${sessions.length} 个会话` : '';
+  let html = '';
+  if (scene.groups.length) {
+    html += '<div class="section">当前任务</div>';
+    for (const group of scene.groups) {
+      html += `<div class="group${collapsed.has(group.path) ? ' collapsed' : ''}">
+        <button class="group-row" data-group="${esc(group.path)}" title="${esc(group.path)}">${chevron}${folder}
+          <span class="project">${esc(group.path)}</span>${group.branch ? `<span class="branch" title="${esc(group.branch)}"><svg class="branch-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-git-branch"></use></svg><span class="branch-name">${esc(group.branch)}</span></span>` : ''}
+        </button>
+        <div class="sessions">${group.sessions.map(sessionHTML).join('')}</div>
+      </div>`;
+    }
+  }
+  const recent = scene.recent.filter(path => !scene.groups.some(group => group.path === path)).slice(0, 10);
+  if (recent.length) {
+    html += `<div class="section recent-title">历史项目 ${recent.length}</div>`;
+    html += recent.map(path => `<button class="recent" data-recent="${esc(path)}" title="在 ${esc(path)} 新建 Shell">${folder}<span class="project">${esc(path)}</span><span class="open">新建 Shell</span></button>`).join('');
+  }
+  document.getElementById('sidebar').innerHTML = html;
+}
+function terminalTop(session) {
+  if (session.brand === 'shell') {
+    return `<span class="t-blue">~/projects/</span><span class="t-blue t-bold">tarmac</span> <span class="t-green">app-architecture</span> <span class="t-yellow">!10 ?5</span>\n<span class="t-green">❯</span> <span class="cursor"> </span>`;
+  }
+  if (session.brand === 'codex') {
+    return `<span class="t-blue">&gt;_</span> <span class="t-bold">OpenAI Codex</span> <span class="t-dim">(v0.169.0)</span>\n   <span class="t-dim">~/projects/013-SK-V500</span>\n\n<span class="t-warn">⚠</span> <span class="t-bold">Heads up, you have less than 25% of your weekly limit left.</span>\n\n<span class="t-dim">• 读取 internal/collector/temperature.go</span>\n<span class="t-dim">  └ 已定位到重连后的序号重置</span>\n\n<span class="t-dim">• Working (12s • esc to interrupt)</span>`;
+  }
+  if (session.brand === 'kimi') {
+    return `<span class="t-blue">K</span> <span class="t-bold">Kimi CLI</span> <span class="t-dim">v2.0</span>\n   <span class="t-dim">~/projects/tarmac</span>\n\n<span class="t-dim">●</span> 已整理本轮修改，等待下一条指令。`;
+  }
+  if (session.brand === 'agy') {
+    return `<span class="t-blue">A</span> <span class="t-bold">Antigravity CLI</span>\n   <span class="t-dim">~/projects/tarmac</span>\n\n<span class="t-dim">●</span> 正在检查桌面端窗口与终端的尺寸同步。`;
+  }
+  return `<span class="t-blue">✻</span> <span class="t-bold">Claude Code</span> <span class="t-dim">v2.1.322</span>\n   <span class="t-dim">~/projects/tarmac</span>\n\n<span class="t-dim">●</span> 我会先检查侧栏的信息密度，再调整选中态与空状态。\n\n<span class="t-dim">●</span> 读取 <span class="t-blue">apps/desktop/src/style.css</span>\n<span class="t-dim">  └ 对比度、间距与分支标签已完成检查</span>\n\n<span class="t-dim">◐ Working (18s · esc to interrupt)</span>`;
+}
+function terminalBottom(session) {
+  if (session.brand === 'shell') return '';
+  if (session.brand === 'codex') {
+    return `<span class="t-green">❯</span> <span class="cursor"> </span><span class="t-dim">Ask Codex to do anything</span>\n\n<span class="t-green">013-SK-V500</span> <span class="t-dim">·</span> <span class="t-pink">5h 23% left</span> <span class="t-dim">·</span> <span class="t-yellow">GPT-6.1-Sol</span>`;
+  }
+  return `<span class="t-green">❯</span> <span class="cursor"> </span>\n<span class="t-dim">? for shortcuts</span>`;
+}
+function renderTerminal() {
+  const center = document.getElementById('center');
+  const session = activeSession();
+  if (!session) {
+    center.innerHTML = `<div class="empty">
+      <div class="empty-mark">❯</div>
+      <strong>暂无 agent</strong>
+      <p>从一个 Shell 开始，再启动 Claude、Codex 或其他 agent。</p>
+      <button class="primary" data-action="new"><span>新建 Shell</span><kbd>Ctrl Shift N</kbd></button>
+      <span class="empty-secondary">也可以从左侧历史项目打开</span>
+    </div>`;
+    return;
+  }
+  center.innerHTML = `<div class="terminal-screen"><div>${terminalTop(session)}</div><div class="terminal-bottom">${terminalBottom(session)}</div></div>`;
+}
+function renderHistory() {
+  const history = document.getElementById('history');
+  history.hidden = !historyVisible;
+  document.getElementById('app').classList.toggle('with-history', historyVisible);
+  document.querySelectorAll('[data-action="history"]').forEach(button => button.setAttribute('aria-pressed', String(historyVisible)));
+  if (!historyVisible) return;
+  const session = activeSession();
+  const records = session?.records ?? [];
+  const brand = session ? brands[session.brand] : null;
+  const state = session?.state ? states[session.state] : 'Shell';
+  history.innerHTML = `<div class="history-head"><h2>输入记录</h2><span class="mode">${brand ? brand.name : '当前会话'}</span>
+    <button class="close" data-action="close-history" title="隐藏输入记录"><kbd>Ctrl Shift H</kbd><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button></div>
+    <div class="records">${records.length ? `<div class="day">今天</div>${records.map((record, index) => `<button class="record" data-record="${index}" aria-expanded="${expanded.has(index)}"><span class="record-meta"><time>${record.at}</time><span class="expand">${expanded.has(index) ? '收起' : '展开'}</span></span><p>${esc(record.text)}</p></button>`).join('')}` : '<p class="none"><strong>暂无输入记录</strong>发送第一条指令后，记录会显示在这里。</p>'}</div>
+    <section class="diag"><h3>诊断</h3><dl><dt>状态</dt><dd>${session ? `${state} · PID 132711` : '无运行中的会话'}</dd><dt>hooks</dt><dd>${session?.brand === 'shell' || !session ? '未配置' : '已验证'}</dd><dt>恢复</dt><dd>字节回放</dd></dl>${session?.brand === 'shell' || !session ? '<p>输入记录尚未接入</p>' : ''}</section>`;
+}
+function render() {
+  const active = activeSession();
+  const usage = document.getElementById('token-usage');
+  usage.textContent = active && ['claude', 'codex'].includes(active.brand)
+    ? Number.isSafeInteger(active.tokens) ? `Token ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(active.tokens)}` : 'Token · 暂无数据' : '';
+  usage.title = Number.isSafeInteger(active?.tokens) ? `设计演示：当前会话累计 ${active.tokens.toLocaleString('en-US')} tokens（含输入、输出及缓存）` : '等待当前会话的用量数据';
+  renderSidebar();
+  renderTerminal();
+  renderHistory();
+  document.querySelectorAll('[data-scene]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.scene === (scene.active === null ? 'empty' : 'multi'))));
+}
+function currentPath() {
+  return scene.groups.find(group => group.sessions.some(session => session.id === scene.active))?.path ?? scene.recent[0] ?? 'tarmac';
+}
+function openShell(path) {
+  let group = scene.groups.find(item => item.path === path);
+  if (!group) {
+    group = { path, branch: '', sessions: [] };
+    scene.groups.push(group);
+  }
+  const session = { id: `shell-${++sequence}`, brand: 'shell', preview: '', records: [] };
+  group.sessions.push(session);
+  scene.active = session.id;
+  collapsed.delete(path);
+  render();
+}
+function setScene(name) {
+  scene = structuredClone(scenes[name]);
+  collapsed = new Set();
+  expanded = new Set();
+  historyVisible = false;
+  render();
+}
+document.addEventListener('click', event => {
+  const target = event.target.closest('[data-session],[data-group],[data-recent],[data-scene],[data-action],[data-record]');
+  if (!target) return;
+  if (target.dataset.session) {
+    scene.active = target.dataset.session;
+    expanded = new Set();
+    render();
+  } else if (target.dataset.group) {
+    collapsed.has(target.dataset.group) ? collapsed.delete(target.dataset.group) : collapsed.add(target.dataset.group);
+    render();
+  } else if (target.dataset.recent) openShell(target.dataset.recent);
+  else if (target.dataset.scene) setScene(target.dataset.scene);
+  else if (target.dataset.action === 'new') openShell(currentPath());
+  else if (target.dataset.action === 'history') { historyVisible = !historyVisible; renderHistory(); }
+  else if (target.dataset.action === 'close-history') { historyVisible = false; renderHistory(); }
+  else if (target.dataset.record !== undefined) {
+    const index = Number(target.dataset.record);
+    expanded.has(index) ? expanded.delete(index) : expanded.add(index);
+    renderHistory();
+  }
+});
+addEventListener('keydown', event => {
+  if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey || event.isComposing) return;
+  if (event.code !== 'KeyH' && event.code !== 'KeyN') return;
+  event.preventDefault();
+  if (event.repeat) return;
+  if (event.code === 'KeyH') historyVisible = !historyVisible;
+  else if (event.code === 'KeyN') openShell(currentPath());
+  else return;
+  render();
+});
+const params = new URLSearchParams(location.search);
+setScene(params.get('scene') === 'empty' ? 'empty' : 'multi');
+if (params.get('history') === '1') {
+  historyVisible = true;
+  renderHistory();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rejects a commit message that contains private information; comment lines are ignored.
+dir=$(dirname "$0")
+grep -v '^#' "$1" | sh "$dir/check-private.sh" "the commit message"

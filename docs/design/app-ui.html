@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarmac App 界面</title>
+<style>
+/* Prototype for the App M0 window. Content mirrors the TUI left column;
+   visuals are the App's own. Colors are tokens so the terminal theme matches. */
+:root {
+  --bg: #121417;          /* terminal and app background */
+  --side: #171a1e;
+  --raise: #1e2227;
+  --line: #262b31;
+  --text: #e4e7ea;
+  --dim: #9aa1a9;
+  --faint: #626a73;
+  --accent: #4fd1c5;
+  --project: #8fd694;
+  --branch-fg: #e2a6c9;
+  --branch-bg: #3a2236;
+  --working: #f0a54a;
+  --waiting: #5fd787;
+  --approval: #ff6b6b;
+  --idle: #8a9199;
+  --running: #cfd3d8;
+  --claude: #e8835f;
+  --codex: #d4d8dc;
+  --shell: #8a9199;
+  --kimi: #87afff;
+  --agy: #6f8cff;
+  --mono: "Ubuntu Sans Mono", "SFMono-Regular", Menlo, "MiSans", monospace;
+  --ui: "Ubuntu", "MiSans", -apple-system, "PingFang SC", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 13px/1.45 var(--ui); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.titlebar { display: flex; align-items: center; height: 36px; padding: 0 16px; background: var(--bg); color: var(--dim); font-size: 12px; user-select: none; }
+.token-usage { margin-left: 24px; font-family: var(--mono); color: #fab387; }
+.app { display: grid; grid-template-columns: 272px minmax(0, 1fr); height: calc(100vh - 36px); }
+.app.with-history { grid-template-columns: 272px minmax(0, 1fr) 300px; }
+
+/* Sidebar: same rows as the TUI, as native list items. */
+.side { display: flex; flex-direction: column; min-height: 0; background: var(--side); border-right: 1px solid var(--line); }
+.side-head { display: flex; align-items: baseline; gap: 8px; padding: 16px 16px 10px; }
+.side-head h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+.side-head .count { color: var(--faint); font-size: 12px; }
+.side-body { flex: 1; overflow: auto; padding: 0 8px 12px; }
+.section { margin: 10px 8px 4px; color: var(--faint); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; }
+.group { margin-top: 2px; }
+.group + .group { margin-top: 10px; }
+.group-row { display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 8px; border-radius: 6px; text-align: left; }
+.group-row:hover { background: var(--raise); }
+.chev { width: 12px; color: var(--faint); transition: transform .12s; }
+.group.collapsed .chev { transform: rotate(-90deg); }
+.folder { width: 14px; height: 14px; color: var(--faint); flex: none; }
+.project { font-weight: 600; color: var(--project); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.branch { flex: none; max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 4px;
+  background: var(--branch-bg); color: var(--branch-fg); font: 11.5px/18px var(--mono); }
+.sessions { position: relative; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--line); }
+.group.collapsed .sessions { display: none; }
+.session { position: relative; display: block; width: 100%; margin-top: 2px; padding: 6px 8px 7px; border-radius: 6px; text-align: left; }
+.session:hover { background: var(--raise); }
+.session.active { background: color-mix(in srgb, var(--accent) 11%, transparent); }
+.session.active::before { content: ""; position: absolute; left: -11px; top: 7px; bottom: 7px; width: 2px; border-radius: 2px; background: var(--accent); }
+.identity { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.logo { display: grid; place-items: center; width: 18px; height: 18px; flex: none; border-radius: 5px; font: 12px/1 var(--mono);
+  background: color-mix(in srgb, currentColor 14%, transparent); }
+.brand { font-weight: 600; white-space: nowrap; }
+.state { display: inline-flex; align-items: center; gap: 5px; color: var(--dim); font-size: 12px; white-space: nowrap; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.state.working .dot { animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.unread { margin-left: auto; flex: none; padding: 0 6px; border-radius: 9px; background: color-mix(in srgb, var(--working) 18%, transparent);
+  color: var(--working); font: 600 11px/17px var(--mono); }
+.preview { display: block; margin: 3px 0 0 25px; color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session.active .preview { color: #c4c9ce; }
+.preview.hint { color: var(--approval); }
+.preview.exit { color: var(--faint); font-family: var(--mono); }
+.recent { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; border-radius: 6px; text-align: left; }
+.recent:hover { background: var(--raise); }
+.recent .project { font-weight: 500; }
+.recent .open { margin-left: auto; color: var(--faint); font-size: 11.5px; opacity: 0; }
+.recent:hover .open { opacity: 1; }
+.side-foot { padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+.error { display: flex; gap: 6px; margin-bottom: 8px; padding: 6px 8px; border-radius: 6px; color: var(--approval); font-size: 12px;
+  background: color-mix(in srgb, var(--approval) 12%, transparent); overflow-wrap: anywhere; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--dim); font-size: 12px; }
+.keys button { display: inline-flex; align-items: center; gap: 6px; }
+kbd { padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); font: 11px/16px var(--mono); background: var(--raise); }
+
+/* Center: the agent's own terminal, edge to edge. */
+.terminal { position: relative; min-width: 0; overflow: hidden; padding: 6px 10px; font: 14px/20px var(--mono); white-space: pre; }
+.terminal .b { font-weight: 700; } .t-dim { color: #8b939b; } .t-blue { color: #6cb6ff; } .t-green { color: #7ee787; }
+.t-yellow { color: #e3b341; } .t-pink { color: #f778ba; } .t-warn { color: #d29922; }
+.cursor { background: var(--text); color: var(--bg); }
+.empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--faint); font: 13px var(--ui); white-space: normal; }
+.empty strong { color: var(--dim); font-weight: 500; font-size: 14px; }
+
+/* Right: read-only input records, hidden by default (Ctrl+Shift+H). */
+.app.with-history .history { display: flex; }
+.history { display: none; flex-direction: column; min-width: 0; overflow: hidden; background: var(--side); border-left: 1px solid var(--line); }
+.history-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; }
+.history-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.mode { color: var(--faint); font-size: 12px; }
+.history-head .close { margin-left: auto; color: var(--faint); }
+.records { flex: 1; overflow: auto; padding: 0 14px; }
+.record { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.record time { color: var(--faint); font: 11.5px var(--mono); }
+.record p { margin: 4px 0 0; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.diag { padding: 10px 14px 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.diag dt { color: var(--faint); }
+.diag dd { margin: 0; }
+
+/* Prototype-only scenario switcher; not part of the App. */
+.demo { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: #0c0d0fe6; font-size: 12px; z-index: 5; }
+.demo span { padding: 4px 8px; color: var(--faint); }
+.demo button { padding: 4px 9px; border-radius: 5px; color: var(--dim); }
+.demo button[aria-pressed="true"] { background: var(--raise); color: var(--text); }
+</style>
+</head>
+<body>
+<header class="titlebar"><span>Tarmac</span><span class="token-usage" id="token-usage"></span></header>
+<div class="app" id="app">
+  <aside class="side" aria-label="会话">
+    <div class="side-head"><h1>Agents</h1><span class="count" id="count"></span></div>
+    <div class="side-body" id="sidebar"></div>
+    <div class="side-foot">
+      <div id="error"></div>
+      <div class="keys">
+        <button id="toggle-history"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd>历史</button>
+        <button id="new-shell"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd>新建</button>
+      </div>
+    </div>
+  </aside>
+  <main class="terminal" id="terminal" aria-label="会话终端"></main>
+  <aside class="history" id="history" aria-label="输入记录">
+    <div class="history-head"><h2>History</h2><span class="mode">会话</span><button class="close" id="close-history" aria-label="隐藏">Ctrl+Shift+H 隐藏</button></div>
+    <div class="records" id="records"></div>
+    <dl class="diag" id="diag"></dl>
+  </aside>
+</div>
+<div class="demo" role="group" aria-label="原型场景">
+  <span>原型场景</span>
+  <button data-scene="multi" aria-pressed="true">多会话</button>
+  <button data-scene="m0">M0 单会话</button>
+  <button data-scene="empty">空状态</button>
+</div>
+<script>
+const brands = {
+  claude: { logo: '✻', name: 'Claude', color: 'var(--claude)' },
+  codex: { logo: '❋', name: 'Codex', color: 'var(--codex)' },
+  kimi: { logo: '☾', name: 'Kimi', color: 'var(--kimi)' },
+  agy: { logo: '✦', name: 'Antigravity', color: 'var(--agy)' },
+  shell: { logo: '❯', name: 'Shell', color: 'var(--shell)' },
+};
+const states = {
+  working: ['工作中', 'var(--working)'], waiting: ['等待输入', 'var(--waiting)'], approval: ['等待授权', 'var(--approval)'],
+  idle: ['空闲', 'var(--idle)'], running: ['运行中', 'var(--running)'],
+};
+const folder = '<svg class="folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3.1l1.4 1.6h5.5c.7 0 1.2.5 1.2 1.2v6.1c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>';
+const scenes = {
+  multi: {
+    groups: [
+      { path: '013-SK-V500', branch: 'feat/chenhao-probe', sessions: [
+        { id: 'a', brand: 'codex', tokens: 86540, state: 'working', preview: '修复探头温度上报偶发丢帧，先补复现用例' },
+        { id: 'b', brand: 'claude', state: 'approval', preview: '' , unread: 1 },
+      ] },
+      { path: 'tarmac', branch: 'app-architecture', sessions: [
+        { id: 'c', brand: 'claude', tokens: 1234567, state: 'working', preview: '按这个顺序开始做', unread: 2 },
+        { id: 'd', brand: 'shell', preview: '' },
+      ] },
+    ],
+    recent: ['web-console', 'mobile-app', 'chat-bot', 'notes', 'android-demo', 'data-pipeline', 'docs-site', 'firmware-tools', 'api-gateway', 'sim-lab'],
+    active: 'c', terminal: 'claude',
+  },
+  m0: {
+    groups: [{ path: 'tarmac', branch: 'app-architecture', sessions: [{ id: 'c', brand: 'codex', state: 'running', preview: '' }] }],
+    recent: ['web-console', 'mobile-app'], active: 'c', terminal: 'codex',
+    error: 'M0 只支持一个运行中的会话，请先退出当前会话',
+  },
+  empty: { groups: [], recent: ['tarmac', 'web-console', 'mobile-app'], active: null, terminal: null },
+};
+const records = [
+  { at: '20:41', text: '中文可以输入' },
+  { at: '20:52', text: '按这个顺序开始做' },
+  { at: '21:10', text: '我只是要内容一样不是要背景一样，\n已重新设计一版UI\n你重新设计\n（第四行在列表中折叠）' },
+];
+let scene = scenes.multi;
+let collapsed = new Set();
+let historyVisible = false;
+
+const esc = value => value.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function sessionHTML(session) {
+  const brand = brands[session.brand];
+  const state = session.state && states[session.state];
+  const hint = session.state === 'approval';
+  const preview = hint ? '需要你选择，切过去处理' : session.preview;
+  return `<button class="session${scene.active === session.id ? ' active' : ''}" data-session="${session.id}">
+    <span class="identity">
+      <span class="logo" style="color:${brand.color}">${brand.logo}</span>
+      <span class="brand">${brand.name}</span>
+      ${state ? `<span class="state ${session.state}" style="color:${state[1]}"><span class="dot"></span><span style="color:var(--dim)">${state[0]}</span></span>` : ''}
+      ${session.unread ? `<span class="unread">+${session.unread}</span>` : ''}
+    </span>
+    ${preview ? `<span class="preview${hint ? ' hint' : ''}">${esc(preview)}</span>` : ''}
+  </button>`;
+}
+function render() {
+  const active = scene.groups.flatMap(group => group.sessions).find(session => session.id === scene.active);
+  const usage = document.getElementById('token-usage');
+  usage.textContent = active && ['claude', 'codex'].includes(active.brand)
+    ? Number.isSafeInteger(active.tokens) ? `Token ${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(active.tokens)}` : 'Token · 暂无数据' : '';
+  usage.title = Number.isSafeInteger(active?.tokens) ? `设计演示：当前会话累计 ${active.tokens.toLocaleString('en-US')} tokens（含输入、输出及缓存）` : '等待当前会话的用量数据';
+  const sidebar = document.getElementById('sidebar');
+  const live = scene.groups.flatMap(group => group.sessions).length;
+  document.getElementById('count').textContent = live ? `${live} 个会话` : '';
+  let html = '';
+  if (scene.groups.length) {
+    html += '<div class="section">当前任务</div>';
+    for (const group of scene.groups) {
+      html += `<div class="group${collapsed.has(group.path) ? ' collapsed' : ''}">
+        <button class="group-row" data-group="${group.path}"><svg class="chev" viewBox="0 0 12 12" fill="currentColor"><path d="M2.5 4.2h7L6 8.3z"/></svg>${folder}
+          <span class="project">${esc(group.path)}</span>${group.branch ? `<span class="branch" title="${esc(group.branch)}">⑂ ${esc(group.branch)}</span>` : ''}</button>
+        <div class="sessions">${group.sessions.map(sessionHTML).join('')}</div></div>`;
+    }
+  }
+  const recent = scene.recent.filter(path => !scene.groups.some(group => group.path === path)).slice(0, 10);
+  if (recent.length) {
+    html += `<div class="section" style="margin-top:18px">历史项目 ${recent.length}</div>`;
+    html += recent.map(path => `<button class="recent" data-recent="${path}">${folder}<span class="project">${esc(path)}</span><span class="open">新建 Shell</span></button>`).join('');
+  }
+  sidebar.innerHTML = html;
+  document.getElementById('error').innerHTML = scene.error ? `<div class="error" role="alert">${esc(scene.error)}</div>` : '';
+  renderTerminal();
+  document.getElementById('app').classList.toggle('with-history', historyVisible);
+  document.getElementById('records').innerHTML = scene.active ? records.map(record => `<article class="record"><time>${record.at}</time><p>${esc(record.text)}</p></article>`).join('') : '<p style="color:var(--faint)">暂无历史</p>';
+  document.getElementById('diag').innerHTML = scene.active
+    ? '<dt>状态</dt><dd>运行中 · PID 121556</dd><dt>hooks</dt><dd>未配置</dd><dt>恢复</dt><dd>字节回放</dd>'
+    : '<dt>状态</dt><dd>无运行中的会话</dd>';
+}
+function renderTerminal() {
+  const terminal = document.getElementById('terminal');
+  if (!scene.active) {
+    terminal.innerHTML = '<div class="empty"><strong>暂无 agent</strong><span><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd> 新建 Shell，或点击左侧历史项目</span></div>';
+    return;
+  }
+  const session = scene.groups.flatMap(group => group.sessions).find(item => item.id === scene.active);
+  if (session.brand === 'shell') {
+    terminal.innerHTML = '<span class="t-blue">~/projects/</span><span class="t-blue b">tarmac</span> <span class="t-green">app-architecture</span> <span class="t-yellow">!10 ?5</span>\n<span class="t-green">❯</span> <span class="cursor"> </span>';
+    return;
+  }
+  const codex = session.brand === 'codex';
+  const prompt = codex ? '<span class="cursor">A</span><span class="t-dim">sk Codex to do anything</span>' : '<span class="cursor"> </span>';
+  const footer = codex ? '<span class="t-green">tarmac</span> <span class="t-dim">·</span> <span class="t-pink">5h 23% left</span> <span class="t-dim">·</span> <span class="t-yellow">GPT-6.1-Sol</span>' : '<span class="t-dim">? for shortcuts</span>';
+  terminal.innerHTML = `
+  <span class="t-blue">&gt;_</span> <span class="b">${codex ? 'OpenAI Codex' : 'Claude Code'}</span> <span class="t-dim">(${codex ? 'v0.169.0' : 'v2.1.322'})</span>
+     <span class="t-dim">~/projects/tarmac</span>
+
+<span class="t-warn">⚠</span> <span class="b">Heads up, you have less than 25% of your weekly limit left.</span>
+
+<span class="t-dim">•</span> 读取 apps/desktop/src/renderer.tsx
+<span class="t-dim">  └ 279 行</span>
+<span class="t-dim">•</span> 修改 apps/desktop/src/style.css <span class="t-green">+12</span> <span class="t-pink">-3</span>
+
+<span class="t-dim">• Working (12s • esc to interrupt)</span>
+
+<span class="b">›</span> ${prompt}
+
+  ${footer}`;
+}
+document.addEventListener('click', event => {
+  const target = event.target.closest('[data-session],[data-group],[data-recent],[data-scene]');
+  if (!target) return;
+  if (target.dataset.session) scene.active = target.dataset.session;
+  else if (target.dataset.group) collapsed.has(target.dataset.group) ? collapsed.delete(target.dataset.group) : collapsed.add(target.dataset.group);
+  else if (target.dataset.recent) openShell(target.dataset.recent);
+  else if (target.dataset.scene) {
+    scene = structuredClone(scenes[target.dataset.scene]);
+    collapsed = new Set();
+    document.querySelectorAll('[data-scene]').forEach(button => button.setAttribute('aria-pressed', String(button === target)));
+  }
+  render();
+});
+function openShell(path) {
+  let group = scene.groups.find(item => item.path === path);
+  if (!group) { group = { path, branch: '', sessions: [] }; scene.groups.push(group); }
+  const id = 'n' + Date.now();
+  group.sessions.push({ id, brand: 'shell', preview: '' });
+  scene.active = id;
+  scene.error = undefined;
+}
+function currentPath() {
+  return scene.groups.find(group => group.sessions.some(session => session.id === scene.active))?.path ?? 'tarmac';
+}
+document.getElementById('toggle-history').onclick = () => { historyVisible = !historyVisible; render(); };
+document.getElementById('close-history').onclick = () => { historyVisible = false; render(); };
+document.getElementById('new-shell').onclick = () => { openShell(currentPath()); render(); };
+addEventListener('keydown', event => {
+  if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey || event.isComposing) return;
+  if (event.code !== 'KeyH' && event.code !== 'KeyN') return;
+  event.preventDefault();
+  if (event.repeat) return;
+  if (event.code === 'KeyH') historyVisible = !historyVisible;
+  else if (event.code === 'KeyN') openShell(currentPath());
+  else return;
+  render();
+});
+scene = structuredClone(scenes.multi);
+render();
+</script>
+</body>
+</html>

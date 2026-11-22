@@ -1,0 +1,43 @@
+{
+  "name": "tarmac-app",
+  "productName": "Tarmac",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/app-m0.mjs test",
+    "build": "node scripts/app-m0.mjs build",
+    "desktop": "node scripts/app-m0.mjs desktop",
+    "desktop:entry": "node scripts/desktop-entry.mjs",
+    "daemon": "node --max-semi-space-size=8 --experimental-strip-types packages/daemon/src/main.ts",
+    "hook": "node --experimental-strip-types packages/cli/src/main.ts hook",
+    "package:local": "node scripts/app-m0.mjs package",
+    "smoke:runtime": "node scripts/app-m0-runtime.mjs",
+    "smoke:desktop": "node scripts/app-m0.mjs smoke"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-serialize": "0.14.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/headless": "6.0.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "ssh2": "1.17.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/ssh2": "1.15.6",
+    "electron": "45.3.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
