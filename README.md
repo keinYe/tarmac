@@ -176,4 +176,6 @@ Tarmac 的代码以 [MIT 许可证](LICENSE) 发布。
 
 ## 致谢
 
+Tarmac 的界面与功能设计参考了 stormzhang 的 One；标题栏的用量配色和 Kimi 额度的读取方式参考了他的 [token-tracker](https://github.com/stormzhang/token-tracker) 。感谢这两个项目带来的启发。
+
 Tarmac 基于 [Electron](https://www.electronjs.org/) 、[xterm.js](https://xtermjs.org/) 、[node-pty](https://github.com/microsoft/node-pty) 、[React](https://react.dev/) 与 [ssh2](https://github.com/mscdex/ssh2) 构建。
