@@ -59,7 +59,8 @@ test('the daemon answers system with counters of its machine', async () => {
   const client = await Client.connect(daemon.socketPath);
   try {
     const sample = await client.request<SystemSample>({ type: 'system' });
-    assert.equal(sample.utcOffset, -new Date(sample.at).getTimezoneOffset());
+    // 0 - offset, not -offset: under UTC that is +0, which is what the JSON reply carries.
+    assert.equal(sample.utcOffset, 0 - new Date(sample.at).getTimezoneOffset());
     assert.ok(sample.cores > 0 && sample.cpuTotal >= sample.cpuIdle && sample.cpuIdle >= 0);
     assert.ok(sample.memTotal > 0 && sample.memAvailable > 0 && sample.memAvailable <= sample.memTotal);
     if (process.platform === 'win32') assert.equal(sample.net, null);
